@@ -1,0 +1,39 @@
+# Problem Definition - START HERE
+# Define your business problem before writing any code
+
+problem:
+  # What business decision does this model inform?
+  description: ""
+  
+  # Primary metric that matters to the business
+  # Examples: revenue_saved, fraud_prevented, ctr_improvement, latency_reduction
+  success_metric: ""
+  
+  # ML proxy metric (if different from business metric)
+  # Examples: precision, recall, accuracy, mse, bleu
+  ml_metric: ""
+  
+  # Target column in your data
+  target_column: ""
+  
+  # Baseline to beat - always define before training
+  baseline:
+    method: ""  # e.g., "predict_majority", "random", "heuristic"
+    metric_value: null
+
+data:
+  # Where does the data come from?
+  source: ""
+  
+  # Do you have enough data? (rule of thumb: 10x features)
+  size_estimate: ""
+  
+  # When are labels available? (immediate / delayed / manual)
+  label_availability: ""
+
+constraints:
+  # Latency requirement in milliseconds (for serving)
+  latency_ms: null
+  
+  # Hardware constraints (cpu / gpu / edge)
+  hardware: ""

@@ -1,0 +1,22 @@
+defaults:
+  - _self_
+  - model: default
+
+data:
+  raw_path: data/raw/train.csv
+  processed_path: data/processed/train.csv
+  test_size: 0.2
+  random_state: 42
+
+model:
+  name: RandomForestClassifier
+  n_estimators: 100
+  max_depth: 10
+
+training:
+  cv_folds: 5
+  verbose: 1
+
+mlflow:
+  experiment_name: ml_project
+  tracking_uri: http://localhost:5000

@@ -1,0 +1,35 @@
+name: Deploy Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: 'Model version'
+        required: true
+        default: 'v1.0'
+
+jobs:
+  register-model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+        
+      - name: Set up Python
+        run: uv python install 3.10
+        
+      - name: Install dependencies
+        run: uv sync
+        
+      - name: Train model
+        run: python -m ml_project train --config configs/train.yaml
+        
+      - name: Register model
+        run: |
+          mlflow models register -n production_model \
+            -s runs:/$(run_id)/model models/
+          
+      - name: Deploy to staging
+        run: echo "Deploying model to staging environment"

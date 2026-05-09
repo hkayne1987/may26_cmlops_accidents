@@ -1,0 +1,37 @@
+stages:
+  preprocess:
+    cmd: python -m ml_project preprocess
+    deps:
+      - src/ml_project
+      - data/raw
+    params:
+      - preprocess
+    out:
+      - data/processed
+
+  train:
+    cmd: python -m ml_project train
+    deps:
+      - src/ml_project
+      - data/processed
+    params:
+      - model
+      - training
+    out:
+      - models
+    metrics:
+      - metrics/train_metrics.json
+
+  evaluate:
+    cmd: python -m ml_project evaluate
+    deps:
+      - models
+      - data/processed
+    params:
+      - evaluate
+    metrics:
+      - metrics/eval_metrics.json
+    plots:
+      - metrics/eval_metrics.json:
+          x: threshold
+          y: [precision, recall]
