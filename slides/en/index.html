@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script data-od-sandbox-shim>(function(){
+  function makeStore(){
+    var data = {};
+    var api = {
+      getItem: function(k){ return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : null; },
+      setItem: function(k, v){ data[k] = String(v); },
+      removeItem: function(k){ delete data[k]; },
+      clear: function(){ data = {}; },
+      key: function(i){ return Object.keys(data)[i] || null; }
+    };
+    Object.defineProperty(api, 'length', { get: function(){ return Object.keys(data).length; } });
+    return api;
+  }
+  function tryShim(name){
+    var works = false;
+    try { works = !!window[name] && typeof window[name].getItem === 'function'; void window[name].length; }
+    catch (_) { works = false; }
+    if (works) return;
+    try { Object.defineProperty(window, name, { configurable: true, value: makeStore() }); }
+    catch (_) { try { window[name] = makeStore(); } catch (__) {} }
+  }
+  tryShim('localStorage');
+  tryShim('sessionStorage');
+  document.addEventListener('click', (e) => {
+    if (!e.target || !(e.target instanceof Element)) return;
+    var link = e.target.closest('a[href]');
+    if (!link) return;
+    var href = link.getAttribute('href');
+    if (href === null) return;
+    var isAnchor = href.startsWith('#') || href === '';
+    if (isAnchor) {
+      e.preventDefault();
+      if (href === '' || href === '#') {
+        window.scrollTo({ top: 0 });
+        history.replaceState(null, '', ' ');
+      } else {
+        var targetId = href.slice(1);
+        var target = targetId ? document.getElementById(targetId) : null;
+        if (target) {
+          target.scrollIntoView();
+          location.hash === href && history.replaceState(null, '', ' ');
+          location.hash = href;
+        }
+      }
+    } else if (link.getAttribute('target') === '_blank') {
+      e.preventDefault();
+      let safe = false;
+      try {
+        var url = new URL(href, location.href);
+        safe =
+          url.protocol === 'http:' ||
+          url.protocol === 'https:' ||
+          url.protocol === 'mailto:';
+      } catch (_) {}
+      safe && window.open(href, '_blank', 'noopener,noreferrer');
+    }
+  });
+})();</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MLOps Project · Kick-Off — Liora (EN)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@300;400;500;600&family=Noto+Serif+SC:wght@300;400;500;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0D1929;
+    --ink-rgb:13,25,41;
+    --paper:#F5F5F5;
+    --paper-rgb:245,245,245;
+    --paper-tint:#E8EAED;
+    --ink-tint:#1A2E4A;
+    --accent:#F97516;
+    --accent-rgb:249,117,22;
+
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --serif-en:"Playfair Display","Source Serif 4",Georgia,serif;
+    --serif-body-en:"Source Serif 4",Georgia,serif;
+    --serif-zh:"Noto Serif SC",source-han-serif-sc,serif;
+    --sans-zh:"Noto Sans SC",source-han-sans-sc,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--paper);font-family:var(--sans-zh);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+  canvas.bg{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;display:block;transition:opacity 1.2s ease}
+  canvas#bg-light{opacity:0}
+  canvas#bg-dark{opacity:1}
+  body.light-bg canvas#bg-light{opacity:1}
+  body.light-bg canvas#bg-dark{opacity:0}
+
+  #deck{position:fixed;inset:0;width:10000vw;height:100vh;display:flex;flex-wrap:nowrap;transition:transform .9s cubic-bezier(.77,0,.175,1);z-index:10;will-change:transform}
+  .slide{width:100vw;height:100vh;flex:0 0 100vw;position:relative;padding:6vh 6vw 10vh 6vw;display:flex;flex-direction:column;overflow:hidden}
+  .slide.light{color:var(--ink)}
+  .slide.dark{color:var(--paper)}
+
+  .slide::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;transition:background .7s ease}
+  .slide.light::before{background:rgba(var(--paper-rgb),.78);backdrop-filter:blur(3px)}
+  .slide.dark::before{background:rgba(var(--ink-rgb),.78);backdrop-filter:blur(3px)}
+  .slide.hero.light::before{background:rgba(var(--paper-rgb),.16);backdrop-filter:none}
+  .slide.hero.dark::before{background:rgba(var(--ink-rgb),.12);backdrop-filter:none}
+  .slide.hero::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none}
+  .slide.hero.light::after{background:linear-gradient(180deg,rgba(var(--paper-rgb),.28) 0%,rgba(var(--paper-rgb),0) 14%,rgba(var(--paper-rgb),0) 86%,rgba(var(--paper-rgb),.28) 100%)}
+  .slide.hero.dark::after{background:linear-gradient(180deg,rgba(var(--ink-rgb),.32) 0%,rgba(var(--ink-rgb),0) 14%,rgba(var(--ink-rgb),0) 86%,rgba(var(--ink-rgb),.32) 100%)}
+
+  .chrome{display:flex;justify-content:space-between;align-items:flex-start;font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:.7}
+  .chrome .left,.chrome .right{display:flex;gap:2.4em;align-items:center}
+  .chrome .sep{width:40px;height:1px;background:currentColor;opacity:.4}
+  .foot{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.55}
+  .foot .title{font-family:var(--serif-zh);font-weight:400;letter-spacing:.05em;text-transform:none;opacity:.75;font-size:13px}
+
+  .tag{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;padding:6px 14px;border:1px solid currentColor;opacity:.85}
+  .rule{width:100%;height:1px;background:currentColor;opacity:.25;margin:3vh 0}
+  .rule.v{width:1px;height:100%;margin:0}
+
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--accent);opacity:.9;margin-bottom:2.6vh}
+  .display{font-family:var(--serif-en);font-weight:700;font-size:11vw;line-height:.92;letter-spacing:-.025em}
+  .display-zh{font-family:var(--serif-zh);font-weight:700;font-size:7.8vw;line-height:1.04;letter-spacing:-.005em}
+  .h1-zh{font-family:var(--serif-zh);font-weight:700;font-size:4.6vw;line-height:1.12;letter-spacing:-.005em}
+  .h2-zh{font-family:var(--serif-zh);font-weight:600;font-size:3.2vw;line-height:1.2;letter-spacing:0}
+  .h3-zh{font-family:var(--serif-zh);font-weight:500;font-size:1.9vw;line-height:1.35}
+  .body-zh{font-family:var(--sans-zh);font-weight:400;font-size:max(15px,1.22vw);line-height:1.75;opacity:.82;letter-spacing:.01em}
+  .body-serif{font-family:var(--serif-zh);font-weight:400;font-size:max(15px,1.3vw);line-height:1.65;opacity:.88}
+  .lead{font-family:var(--serif-zh);font-weight:400;font-size:1.9vw;line-height:1.4;opacity:.85}
+  .meta{font-family:var(--mono);font-size:max(11px,.88vw);letter-spacing:.16em;text-transform:uppercase;opacity:.6}
+  .big-num{font-family:var(--serif-en);font-weight:800;font-size:10vw;line-height:.85;letter-spacing:-.03em;font-feature-settings:"tnum"}
+  .mid-num{font-family:var(--serif-en);font-weight:700;font-size:5.5vw;line-height:.88;letter-spacing:-.02em;font-feature-settings:"tnum"}
+  .ghost{font-family:var(--serif-en);font-weight:900;font-size:34vw;line-height:.8;opacity:.06;letter-spacing:-.04em;position:absolute;font-feature-settings:"tnum"}
+  em{font-style:italic;font-family:var(--serif-en)}
+  .en{font-family:var(--serif-en);font-style:italic;font-weight:500}
+
+  .col{display:flex;flex-direction:column;gap:2.4vh}
+  .row{display:flex;align-items:center;gap:3vw}
+  .grid-6{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:4vw 6vw;flex:1;align-content:center;padding:2vh 0}
+  .grid-9{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:3vh 4vw;flex:1;align-content:center}
+  .grid-4{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:4vh 6vw;flex:1;align-content:center}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:4vw;flex:1;align-content:center}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:4vw;flex:1;align-items:center}
+  .split-55{display:grid;grid-template-columns:55fr 45fr;gap:5vw;flex:1;align-items:stretch}
+  .fill{flex:1}
+  .center{align-items:center;justify-content:center;text-align:center}
+  .bottom-left{position:absolute;left:6vw;bottom:9vh;max-width:50vw}
+  .bottom-right{position:absolute;right:6vw;bottom:9vh;max-width:50vw;text-align:right}
+  .top-right{position:absolute;right:6vw;top:6vh;text-align:right}
+
+  .stat{display:flex;flex-direction:column;gap:1vh;align-items:flex-start}
+  .stat .n{font-family:var(--serif-en);font-weight:800;font-size:8vw;line-height:.88;letter-spacing:-.03em;font-feature-settings:"tnum"}
+  .stat .l{font-family:var(--sans-zh);font-size:max(13px,1.05vw);opacity:.7;margin-top:1vh;font-weight:400;line-height:1.5}
+  .stat .m{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;opacity:.5;margin-bottom:.2vh}
+
+  .callout{padding:3vh 2.4vw;border-left:3px solid var(--accent);position:relative;font-family:var(--serif-zh);font-size:max(15px,1.2vw);line-height:1.55;opacity:.92}
+  .slide.light .callout{background:rgba(var(--ink-rgb),.05)}
+  .slide.dark .callout{background:rgba(var(--paper-rgb),.06)}
+  .callout .cite{display:block;margin-top:1.6vh;font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;opacity:.6}
+  .callout .q-big{font-family:var(--serif-zh);font-weight:600;font-size:max(17px,1.6vw);line-height:1.42}
+
+  .plat{display:flex;flex-direction:column;justify-content:flex-end;padding:2vh 0;border-top:1px solid currentColor;border-color:rgba(127,127,127,.35)}
+  .plat .name{font-family:var(--serif-zh);font-weight:700;font-size:1.8vw;margin-bottom:.6vh}
+  .plat .nb{font-family:var(--serif-en);font-weight:700;font-size:3.2vw;letter-spacing:-.02em;line-height:1;font-feature-settings:"tnum"}
+  .plat .sub{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.55;margin-top:.6vh}
+  .plat .fill{font-family:var(--sans-zh);font-weight:300;font-size:2.4vw;opacity:.28;letter-spacing:-.01em;line-height:1}
+
+  .rowline{display:grid;grid-template-columns:1fr 2fr 1fr;gap:2vw;padding:2.2vh 0;border-top:1px solid currentColor;align-items:center;border-color:rgba(127,127,127,.25)}
+  .rowline:last-child{border-bottom:1px solid currentColor;border-color:rgba(127,127,127,.25)}
+  .rowline .k{font-family:var(--serif-zh);font-weight:700;font-size:1.7vw}
+  .rowline .v{font-family:var(--sans-zh);font-weight:400;font-size:max(14px,1.2vw);opacity:.85;line-height:1.55}
+  .rowline .m{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;opacity:.6;justify-self:end}
+
+  .pillar{display:flex;flex-direction:column;gap:1.8vh}
+  .pillar .ic{font-family:var(--serif-en);font-style:italic;font-size:2.6vw;opacity:.45;font-weight:400}
+  .pillar .ic svg{width:2.8vw;height:2.8vw;stroke-width:1.2;opacity:.7}
+  .pillar .t{font-family:var(--serif-zh);font-weight:700;font-size:2.4vw;line-height:1.1}
+  .pillar .d{font-family:var(--sans-zh);font-weight:400;font-size:max(14px,1.1vw);opacity:.76;line-height:1.6}
+
+  .sign{font-family:var(--serif-en);font-style:italic;font-weight:500;font-size:2vw;opacity:.7}
+  .hi{position:relative;display:inline}
+  .slide.dark .hi::after{content:"";position:absolute;left:-.1em;right:-.1em;bottom:-.05em;height:.28em;background:rgba(var(--paper-rgb),.15);z-index:-1}
+  .slide.light .hi::after{content:"";position:absolute;left:-.1em;right:-.1em;bottom:-.05em;height:.28em;background:rgba(var(--ink-rgb),.08);z-index:-1}
+
+  .ico{width:1em;height:1em;display:inline-block;vertical-align:-.12em;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  .ico-lg,.ico-md,.ico-sm{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+  .ico-lg{width:2.6vw;height:2.6vw;stroke-width:1.2;display:inline-block}
+  .ico-md{width:1.8vw;height:1.8vw;stroke-width:1.3;display:inline-block;vertical-align:-.4em}
+  .ico-sm{width:1.1vw;height:1.1vw;stroke-width:1.4;display:inline-block;vertical-align:-.15em;opacity:.7}
+
+  .img-slot{border:1.5px dashed rgba(127,127,127,.4);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1vh;padding:2vh 2vw;font-family:var(--mono);font-size:10px;letter-spacing:.28em;text-transform:uppercase;opacity:.55;position:relative;aspect-ratio:16/9;width:100%;max-height:56vh;margin-inline:auto;box-sizing:border-box}
+  .img-slot::before{content:"";position:absolute;inset:8px;border:1px solid currentColor;opacity:.2}
+  .img-slot .plus{font-size:2vw;font-weight:300;opacity:.5;letter-spacing:0}
+  .img-slot .label{position:relative;z-index:2;text-align:center}
+  .img-slot.r-4x3{aspect-ratio:4/3}
+  .img-slot.r-3x2{aspect-ratio:3/2}
+  .img-slot.r-1x1{aspect-ratio:1/1}
+
+  .frame-img{overflow:hidden;position:relative;background:rgba(0,0,0,.04);box-sizing:border-box;width:100%;border-radius:4px}
+  .slide.dark .frame-img{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12)}
+  .frame-img > img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+  .frame-cap{display:flex;justify-content:space-between;align-items:baseline;gap:1vw;margin-top:.8vh;font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;opacity:.72}
+  .frame-cap .pf{font-family:var(--serif-zh);font-weight:600;font-size:max(13px,1vw);letter-spacing:.04em;text-transform:none;opacity:.94}
+  .frame-cap .nb{font-family:var(--serif-en);font-style:italic;font-size:max(15px,1.2vw);letter-spacing:.02em;text-transform:none;opacity:.88}
+  .frame-cap .idx{font-family:var(--mono);opacity:.5}
+  figure.tile{display:flex;flex-direction:column;margin:0;min-width:0}
+  figure.tile > .frame-img{flex:0 0 auto}
+
+  #nav{position:fixed;left:50%;bottom:2.6vh;transform:translateX(-50%);z-index:30;display:flex;gap:10px;padding:8px 14px;border-radius:999px;background:rgba(0,0,0,.18);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  #nav .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);cursor:pointer;transition:all .3s ease;border:0;padding:0}
+  #nav .dot:hover{background:rgba(255,255,255,.5);transform:scale(1.15)}
+  #nav .dot.active{background:#F97516;width:22px;border-radius:999px}
+  body.light-bg #nav{background:rgba(255,255,255,.25)}
+  body.light-bg #nav .dot{background:rgba(var(--ink-rgb),.25)}
+  body.light-bg #nav .dot.active{background:#F97516}
+  #hint{position:fixed;bottom:3vh;right:3vw;z-index:30;font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;opacity:.4;mix-blend-mode:difference;color:#aaa}
+
+  .frame{flex:1;display:flex;flex-direction:column;min-height:0}
+  .frame.grid-2-7-5,
+  .frame.grid-2-6-6,
+  .frame.grid-2-8-4,
+  .frame.grid-3-3,
+  .frame.grid-6{display:grid}
+
+  .h-hero{
+    font-family:var(--serif-zh);
+    font-weight:900;
+    font-size:10vw;
+    line-height:.96;
+    letter-spacing:-.02em;
+  }
+  .h-xl{
+    font-family:var(--serif-zh);
+    font-weight:700;
+    font-size:6.2vw;
+    line-height:1.08;
+    letter-spacing:-.01em;
+  }
+  .h-sub{
+    font-family:var(--serif-zh);
+    font-weight:500;
+    font-size:3.1vw;
+    line-height:1.25;
+    letter-spacing:0;
+    opacity:.7;
+  }
+  .h-md{
+    font-family:var(--serif-zh);
+    font-weight:600;
+    font-size:2.3vw;
+    line-height:1.3;
+  }
+  .h-hero-en,.h-xl-en{font-family:var(--serif-en);letter-spacing:-.025em}
+  .lead{
+    font-family:var(--serif-zh);
+    font-weight:400;
+    font-size:1.75vw;
+    line-height:1.5;
+    opacity:.86;
+  }
+  .meta-row{
+    display:flex;
+    gap:1.2em;
+    align-items:baseline;
+    flex-wrap:wrap;
+    font-family:var(--mono);
+    font-size:max(12px,.92vw);
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    opacity:.6;
+  }
+  .stat-card{
+    display:flex;
+    flex-direction:column;
+    gap:.8vh;
+    align-items:flex-start;
+    padding-top:1.6vh;
+    border-top:2px solid var(--accent);
+    border-color:rgba(249,117,22,.55);
+  }
+  .stat-card .stat-label{
+    font-family:var(--mono);
+    font-size:max(10px,.78vw);
+    letter-spacing:.24em;
+    text-transform:uppercase;
+    opacity:.55;
+  }
+  .stat-card .stat-nb{
+    font-family:var(--serif-en);
+    font-weight:800;
+    font-size:5.8vw;
+    line-height:.9;
+    letter-spacing:-.03em;
+    font-feature-settings:"tnum";
+    margin-top:.4vh;
+  }
+  .stat-card .stat-nb .stat-unit{
+    font-family:var(--serif-zh);
+    font-weight:500;
+    font-size:.38em;
+    letter-spacing:0;
+    opacity:.72;
+    margin-left:.14em;
+  }
+  .stat-card .stat-note{
+    font-family:var(--sans-zh);
+    font-weight:400;
+    font-size:max(13px,1.05vw);
+    line-height:1.5;
+    opacity:.72;
+    margin-top:.6vh;
+  }
+  .grid-4 .stat-card .stat-nb{font-size:7.5vw}
+  .grid-3 .stat-card .stat-nb{font-size:6.8vw}
+
+  .pipeline-section{
+    margin-top:4.4vh;
+    padding-top:2.8vh;
+    border-top:1px dashed rgba(127,127,127,.32);
+  }
+  .pipeline-section:first-of-type{
+    border-top:0;
+    padding-top:0;
+    margin-top:3vh;
+  }
+  .pipeline-label{
+    font-family:var(--mono);
+    font-size:max(11px,.85vw);
+    letter-spacing:.24em;
+    text-transform:uppercase;
+    opacity:.62;
+    margin-bottom:2.2vh;
+  }
+  .pipeline{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:1.2vw;
+  }
+  .pipeline[data-cols="3"]{grid-template-columns:repeat(3,1fr)}
+  .pipeline[data-cols="4"]{grid-template-columns:repeat(4,1fr)}
+  .pipeline[data-cols="6"]{grid-template-columns:repeat(6,1fr)}
+  .step{
+    display:flex;
+    flex-direction:column;
+    gap:.8vh;
+    padding-top:1.4vh;
+    border-top:2px solid rgba(249,117,22,.4);
+  }
+  .step-nb{
+    font-family:var(--serif-en);
+    font-style:italic;
+    font-weight:500;
+    font-size:1.15vw;
+    color:var(--accent);
+    opacity:.85;
+  }
+  .step-title{
+    font-family:var(--sans-zh);
+    font-weight:700;
+    font-size:1.55vw;
+    letter-spacing:.01em;
+    line-height:1.2;
+  }
+  .step-desc{
+    font-family:var(--sans-zh);
+    font-weight:400;
+    font-size:max(12px,.95vw);
+    line-height:1.45;
+    opacity:.72;
+  }
+
+  .grid-2-7-5{display:grid;grid-template-columns:7fr 5fr;gap:3vw 4vh;align-items:start}
+  .grid-2-6-6{display:grid;grid-template-columns:1fr 1fr;gap:3vw 4vh;align-items:start}
+  .grid-2-8-4{display:grid;grid-template-columns:8fr 4fr;gap:3vw 4vh;align-items:start}
+  .grid-3-3{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    grid-auto-rows:minmax(0,1fr);
+    gap:2.4vh 2vw;
+  }
+  figure.frame-img{margin:0;display:flex;flex-direction:column;min-width:0}
+  .img-cap{
+    display:block;
+    margin-top:.8vh;
+    font-family:var(--mono);
+    font-size:max(10px,.8vw);
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    opacity:.6;
+  }
+  .callout-src{
+    display:block;
+    margin-top:1.6vh;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    opacity:.6;
+  }
+  .chrome{font-family:var(--mono);font-size:max(11px,.78vw);letter-spacing:.2em;text-transform:uppercase;opacity:.62}
+  .foot{font-family:var(--mono);font-size:max(11px,.78vw);letter-spacing:.18em;text-transform:uppercase;opacity:.5}
+
+  @media (max-width:900px){
+    .display{font-size:16vw}
+    .display-zh{font-size:12vw}
+    .h1-zh{font-size:7vw}
+    .h-hero{font-size:14vw}
+    .h-xl{font-size:9vw}
+    .pipeline{grid-template-columns:repeat(2,1fr)}
+    .grid-2-7-5,.grid-2-6-6,.grid-2-8-4{grid-template-columns:1fr}
+  }
+  ul{list-style:none;padding:0}
+  ul li{padding-left:1.2em;position:relative}
+  ul li::before{content:"—";position:absolute;left:0;opacity:.5}
+
+  [data-cover-liora]::before{background:rgba(27,27,27,.94)!important;backdrop-filter:none!important}
+  [data-cover-liora]::after{background:linear-gradient(180deg,rgba(27,27,27,0) 0%,rgba(27,27,27,0) 85%,rgba(27,27,27,.5) 100%)!important}
+  [data-cover-liora] .deco-block{position:absolute;right:0;top:0;width:38vw;height:100%;background:linear-gradient(135deg,rgba(249,117,22,.14) 0%,rgba(249,117,22,.05) 70%,transparent 100%);pointer-events:none;z-index:-1}
+  [data-cover-liora] .deco-line{position:absolute;left:6vw;bottom:16vh;width:12vw;height:2px;background:#F97516;opacity:.6;pointer-events:none}
+</style>
+</head>
+<body>
+
+<canvas id="bg-dark" class="bg"></canvas>
+<canvas id="bg-light" class="bg"></canvas>
+<div id="hint">← → · ESC</div>
+
+<div id="deck">
+
+<section class="slide hero" data-screen-label="01 Cover" data-cover-liora>
+  <div class="deco-block"></div>
+  <div class="chrome">
+    <div style="color:#F97516;font-weight:600">Liora · MLOps</div>
+    <div style="color:#FAF0E6;opacity:.45">Vol.01</div>
+  </div>
+  <div class="frame" style="display:grid; gap:3vh; align-content:center; min-height:80vh">
+    <div style="font-family:var(--mono);font-size:13px;letter-spacing:.32em;text-transform:uppercase;color:#F97516;font-weight:500;margin-bottom:.5vh">Kick-Off · 2026</div>
+    <h1 class="h-hero" style="font-size:9.5vw;color:#FAF0E6;font-weight:900;letter-spacing:-.025em">MLOps Project</h1>
+    <div style="width:5vw;min-width:48px;height:3px;background:#F97516;margin:1vh 0"></div>
+    <p class="lead" style="max-width:48vw;color:#FAF0E6;opacity:.8;font-family:var(--serif-zh);font-weight:400;font-size:1.7vw;line-height:1.5">
+      From architecture to deployment —<br>
+      building reproducible ML pipelines.
+    </p>
+    <div style="display:flex;gap:1.4em;align-items:center;font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#FAF0E6;opacity:.55;margin-top:1.5vh">
+      <span>Sébastien Sime</span>
+      <span style="opacity:.35">·</span>
+      <span>Machine Learning Engineer · Liora</span>
+    </div>
+  </div>
+  <div class="deco-line"></div>
+  <div class="foot">
+    <div style="color:#F97516;opacity:.5">MLOps Project · Kick-Off</div>
+    <div style="color:#F97516;opacity:.5">2026</div>
+  </div>
+</section>
+
+<section class="slide dark" data-screen-label="02 About Me">
+  <div class="chrome">
+    <div>Intro</div>
+    <div>02 / 27</div>
+  </div>
+  <div class="frame" style="display:grid; gap:5vh; align-content:center; min-height:80vh">
+    <div class="kicker">About Me</div>
+    <h2 class="h-xl" style="font-size:5.5vw">Sébastien Sime</h2>
+    <div style="display:flex; gap:6vw; margin-top:3vh">
+      <div class="stat-card" style="border-top-color:rgba(249,117,22,.6)">
+        <div class="stat-label">Role</div>
+        <div class="stat-nb" style="font-size:3.5vw">ML Engineer</div>
+        <div class="stat-note">Liora</div>
+      </div>
+      <div class="stat-card" style="border-top-color:rgba(249,117,22,.6)">
+        <div class="stat-label">Specialty</div>
+        <div class="stat-nb" style="font-size:3.5vw">MLOps</div>
+        <div class="stat-note">Pipelines · Deployment · Infra</div>
+      </div>
+    </div>
+    <div style="border-left:2px solid rgba(255,255,255,.15); padding-left:2vw; margin-top:2vh">
+      <p style="font-family:var(--sans-zh); font-size:max(14px,1.2vw); line-height:1.7; opacity:.78">
+        End-to-end MLOps project support —<br>
+        from foundations to monitoring, including orchestration and continuous deployment.
+      </p>
+    </div>
+  </div>
+  <div class="foot">
+    <div>About Me</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide light" data-screen-label="03 Objectives">
+  <div class="chrome">
+    <div>Session · Kick-Off</div>
+    <div>03 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:6vh">
+    <div class="kicker">Objectives</div>
+    <h2 class="h-xl">Session Objectives</h2>
+    <div class="rule" style="margin:3vh 0"></div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6vw 4vw; flex:1; align-content:center; margin-top:2vh">
+      <div>
+        <div class="step">
+          <div class="step-nb">01</div>
+          <div class="step-title">Introductions</div>
+          <div class="step-desc">Get to know the team and understand everyone's expectations.</div>
+        </div>
+        <div class="step" style="margin-top:4vh">
+          <div class="step-nb">02</div>
+          <div class="step-title">Session Organization</div>
+          <div class="step-desc">Define the rhythm and format of mentoring check-ins.</div>
+        </div>
+      </div>
+      <div>
+        <div class="step">
+          <div class="step-nb">03</div>
+          <div class="step-title">MLOps Methodology</div>
+          <div class="step-desc">Present the 4 key phases and architectural principles.</div>
+        </div>
+        <div class="step" style="margin-top:4vh">
+          <div class="step-nb">04</div>
+          <div class="step-title">Next Steps &amp; Q&amp;A</div>
+          <div class="step-desc">Concrete next steps and answers to your questions.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>MLOps Project · Kick-Off</div>
+    <div>Objectives</div>
+  </div>
+</section>
+
+<section class="slide hero light" data-screen-label="04 Section Introductions">
+  <div class="chrome">
+    <div>Act I</div>
+    <div>04 / 27</div>
+  </div>
+  <div class="frame" style="display:grid; gap:6vh; align-content:center; min-height:80vh">
+    <div class="kicker">Act I</div>
+    <h1 class="h-hero" style="font-size:8.5vw">Introductions</h1>
+    <p class="lead" style="max-width:50vw">
+      Getting to know each other before building.
+    </p>
+  </div>
+  <div class="foot">
+    <div>Act I · Introductions</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide light" data-screen-label="05 Let's Get to Know Each Other">
+  <div class="chrome">
+    <div>Act I · Team</div>
+    <div>05 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:6vh">
+    <div class="kicker">Icebreaker</div>
+    <h2 class="h-xl" style="margin-bottom:4vh">Let's Get to Know Each Other</h2>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:5vw; flex:1; align-content:start; margin-top:2vh">
+      <div class="callout" style="border-left-color:var(--ink); min-height:20vh; display:flex; flex-direction:column">
+        <div class="kicker" style="opacity:.5; margin-bottom:1.4vh">Question 01</div>
+        <div class="q-big" style="font-size:max(16px,1.4vw)">
+          Introduce yourself in<br>a few words
+        </div>
+      </div>
+      <div class="callout" style="border-left-color:var(--ink); min-height:20vh; display:flex; flex-direction:column">
+        <div class="kicker" style="opacity:.5; margin-bottom:1.4vh">Question 02</div>
+        <div class="q-big" style="font-size:max(16px,1.4vw)">
+          Was this project<br>your first choice?
+        </div>
+      </div>
+      <div class="callout" style="border-left-color:var(--ink); min-height:20vh; display:flex; flex-direction:column">
+        <div class="kicker" style="opacity:.5; margin-bottom:1.4vh">Question 03</div>
+        <div class="q-big" style="font-size:max(16px,1.4vw)">
+          A known strength /<br>weakness
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act I · Icebreaker</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide hero dark" data-screen-label="06 Section Mentoring">
+  <div class="chrome">
+    <div>Act II</div>
+    <div>06 / 27</div>
+  </div>
+  <div class="frame" style="display:grid; gap:6vh; align-content:center; min-height:80vh">
+    <div class="kicker">Act II</div>
+    <h1 class="h-hero" style="font-size:8.5vw">Mentoring<br>Sessions</h1>
+    <p class="lead" style="max-width:50vw">
+      Organization, rhythm and format.
+    </p>
+  </div>
+  <div class="foot">
+    <div>Act II · Mentoring</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide light" data-screen-label="07 Organization">
+  <div class="chrome">
+    <div>Act II · Organization</div>
+    <div>07 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:6vh">
+    <div class="kicker">Cadence</div>
+    <h2 class="h-xl" style="margin-bottom:4vh">Session Organization</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:5vw; flex:1; align-content:start">
+      <div>
+        <div class="stat-card">
+          <div class="stat-label">Frequency</div>
+          <div class="stat-nb" style="font-size:3.5vw">1h / week</div>
+          <div class="stat-note">Zoom or Teams check-in, every week</div>
+        </div>
+        <div class="stat-card" style="margin-top:4vh">
+          <div class="stat-label">Focus</div>
+          <div class="stat-nb" style="font-size:3.5vw">Review &amp; Questions</div>
+          <div class="stat-note">Review the latest work and answer questions</div>
+        </div>
+        <div class="stat-card" style="margin-top:4vh">
+          <div class="stat-label">Objectives</div>
+          <div class="stat-nb" style="font-size:3.5vw">Team &amp; Individual</div>
+          <div class="stat-note">Set objectives to balance the workload</div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:space-between">
+        <div class="callout" style="margin-top:2vh">
+          <div class="q-big">
+            The goal is to review your latest work<br>
+            and answer your questions.
+          </div>
+          <div class="callout-src">— Sébastien</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act II · Mentoring</div>
+    <div>Organization</div>
+  </div>
+</section>
+
+<section class="slide dark" data-screen-label="08 Review Points">
+  <div class="chrome">
+    <div>Act II · Review</div>
+    <div>08 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:5vh">
+    <div class="kicker">Weekly Review</div>
+    <h2 class="h-xl">Review Points</h2>
+    <p class="lead" style="margin-bottom:4vh; max-width:60vw">
+      Each team member presents a summary of progress.
+    </p>
+    <div class="grid-3" style="margin-top:2vh; gap:3vw">
+      <div class="step">
+        <div class="step-nb">01</div>
+        <div class="step-title">Completed Tasks</div>
+        <div class="step-desc">Work done by each member since the last check-in.</div>
+      </div>
+      <div class="step">
+        <div class="step-nb">02</div>
+        <div class="step-title">Successes &amp; Challenges</div>
+        <div class="step-desc">Wins, difficulties encountered and any blockers.</div>
+      </div>
+      <div class="step">
+        <div class="step-nb">03</div>
+        <div class="step-title">Remaining Backlog</div>
+        <div class="step-desc">What remains to reach the set objectives.</div>
+      </div>
+    </div>
+    <div style="margin-top:auto; padding:2.4vh 2vw; border-left:3px solid rgba(255,255,255,.25);">
+      <p style="font-family:var(--sans-zh); font-size:max(13px,1.1vw); opacity:.7">
+        <span style="font-family:var(--serif-en); font-weight:700; font-size:1.4vw; opacity:.5">⤷</span>
+        Take turns — no exceptions.
+      </p>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act II · Review Points</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide hero light" data-screen-label="09 Section Methodology">
+  <div class="chrome">
+    <div>Act III</div>
+    <div>09 / 27</div>
+  </div>
+  <div class="frame" style="display:grid; gap:6vh; align-content:center; min-height:80vh">
+    <div class="kicker">Act III</div>
+    <h1 class="h-hero" style="font-size:8vw">MLOps Project<br>Methodology</h1>
+    <p class="lead" style="max-width:50vw">
+      A progressive, hands-on approach.
+    </p>
+  </div>
+  <div class="foot">
+    <div>Act III · Methodology</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide dark" data-screen-label="10 Approach">
+  <div class="chrome">
+    <div>Act III · Approach</div>
+    <div>10 / 27</div>
+  </div>
+  <div class="frame grid-2-6-6" style="padding-top:6vh; gap:5vw">
+    <div>
+      <div class="kicker">Our Approach</div>
+      <h2 class="h-xl" style="font-size:5vw">Methodology</h2>
+      <div style="margin-top:4vh; display:flex; flex-direction:column; gap:2.4vh">
+        <div class="step">
+          <div class="step-nb">Learning</div>
+          <div class="step-desc">Progressive, guided by problems and challenges encountered.</div>
+        </div>
+        <div class="step">
+          <div class="step-nb">Practice</div>
+          <div class="step-desc">Concrete implementation and regular support.</div>
+        </div>
+        <div class="step">
+          <div class="step-nb">Production</div>
+          <div class="step-desc">Reproducible ML projects, reliable deployments, monitored models.</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="callout" style="margin-top:6vh; border-left-color:rgba(255,255,255,.3)">
+        <div class="q-big">Key Benefits</div>
+        <div style="margin-top:2.4vh; display:flex; flex-direction:column; gap:1.6vh">
+          <div class="step-desc">✓ Scalable solutions</div>
+          <div class="step-desc">✓ Monitored models</div>
+          <div class="step-desc">✓ Reliable deployments</div>
+          <div class="step-desc">✓ Reproducible projects</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act III · Methodology</div>
+    <div>Approach</div>
+  </div>
+</section>
+
+<section class="slide light" data-screen-label="11 Overview">
+  <div class="chrome">
+    <div>Act III · Plan</div>
+    <div>11 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:5vh">
+    <div class="kicker">Timeline</div>
+    <h2 class="h-xl">Overview</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:5vw; flex:1; align-content:start; margin-top:3vh">
+      <div>
+        <div class="stat-card">
+          <div class="stat-label">Full-time Format</div>
+          <div class="stat-nb" style="font-size:3.5vw">24 <span class="stat-unit">weeks</span></div>
+        </div>
+        <div class="stat-card" style="margin-top:3vh">
+          <div class="stat-label">Bootcamp Format</div>
+          <div class="stat-nb" style="font-size:3.5vw">40 <span class="stat-unit">days</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="pipeline-section">
+          <div class="pipeline-label">4 Main Phases</div>
+          <div class="pipeline" data-cols="4" style="grid-template-columns:repeat(4,1fr)">
+            <div class="step">
+              <div class="step-nb">01</div>
+              <div class="step-title">Foundations</div>
+              <div class="step-desc">Environment, basic pipelines</div>
+            </div>
+            <div class="step">
+              <div class="step-nb">02</div>
+              <div class="step-title">Microservices</div>
+              <div class="step-desc">Versioning, experiment tracking</div>
+            </div>
+            <div class="step">
+              <div class="step-nb">03</div>
+              <div class="step-title">Orchestration</div>
+              <div class="step-desc">Deployment, CI, scalability</div>
+            </div>
+            <div class="step">
+              <div class="step-nb">04</div>
+              <div class="step-title">Monitoring</div>
+              <div class="step-desc">Dashboard, alerts, maintenance</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act III · Planning</div>
+    <div>Overview</div>
+  </div>
+</section>
+
+<section class="slide dark" data-screen-label="12 Phase 1">
+  <div class="chrome">
+    <div>Act III · Phase 1</div>
+    <div>12 / 27</div>
+  </div>
+  <div class="frame grid-2-7-5" style="padding-top:5vh">
+    <div style="display:flex; flex-direction:column; justify-content:space-between; gap:3vh">
+      <div>
+        <div class="kicker">Phase 01</div>
+        <h2 class="h-xl" style="font-size:5vw">Foundations</h2>
+        <p class="lead" style="margin-top:3vh">
+          Frame the project and set up the reproducible development environment.
+        </p>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:2vh">
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Code Versioning</div>
+          <div class="step-desc">Git, code organization</div>
+        </div>
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Reproducible Environments</div>
+          <div class="step-desc">Environment consistency</div>
+        </div>
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Basic ML Pipelines</div>
+          <div class="step-desc">Data processing, training, basic API</div>
+        </div>
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Initial Documentation</div>
+          <div class="step-desc">Collaboration basics</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:2vh; padding-top:2vh">
+      <div class="callout" style="border-left-color:rgba(255,255,255,.2)">
+        <div class="kicker" style="opacity:.5; margin-bottom:1vh">Expected Challenges</div>
+        <div class="step-desc">— Environment consistency</div>
+        <div class="step-desc">— Code organization</div>
+        <div class="step-desc">— Data management</div>
+        <div class="step-desc">— Collaboration basics</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act III · Phase 1 : Foundations</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide light" data-screen-label="13 Phase 2">
+  <div class="chrome">
+    <div>Act III · Phase 2</div>
+    <div>13 / 27</div>
+  </div>
+  <div class="frame grid-2-7-5" style="padding-top:5vh">
+    <div style="display:flex; flex-direction:column; justify-content:space-between; gap:3vh">
+      <div>
+        <div class="kicker">Phase 02</div>
+        <h2 class="h-xl" style="font-size:5vw">Micro-Services<br>&amp; Versioning</h2>
+        <p class="lead" style="margin-top:3vh">
+          Experiment tracking, data and model versioning, decomposition into microservices.
+        </p>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:2vh">
+        <div class="step">
+          <div class="step-title">Experiment Tracking System</div>
+          <div class="step-desc">Experiment organization</div>
+        </div>
+        <div class="step">
+          <div class="step-title">Data Versioning</div>
+          <div class="step-desc">Data traceability</div>
+        </div>
+        <div class="step">
+          <div class="step-title">Service Isolation</div>
+          <div class="step-desc">Result reproducibility</div>
+        </div>
+        <div class="step">
+          <div class="step-title">End-to-End Versioning</div>
+          <div class="step-desc">Pipeline automation</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:2vh; padding-top:2vh">
+      <div class="callout">
+        <div class="kicker" style="opacity:.5; margin-bottom:1vh">Key Consideration</div>
+        <div class="step-desc">— Experiment organization</div>
+        <div class="step-desc">— Data traceability</div>
+        <div class="step-desc">— Reproducibility</div>
+        <div class="step-desc">— Automation</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act III · Phase 2 : Micro-Services &amp; Versioning</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide dark" data-screen-label="14 Phase 3">
+  <div class="chrome">
+    <div>Act III · Phase 3</div>
+    <div>14 / 27</div>
+  </div>
+  <div class="frame grid-2-7-5" style="padding-top:5vh">
+    <div style="display:flex; flex-direction:column; justify-content:space-between; gap:3vh">
+      <div>
+        <div class="kicker">Phase 03</div>
+        <h2 class="h-xl" style="font-size:5vw">Orchestration<br>&amp; Deployment</h2>
+        <p class="lead" style="margin-top:3vh">
+          Finalize orchestration, set up CI and secure the API.
+        </p>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:2vh">
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Secured APIs</div>
+          <div class="step-desc">Authorization and authentication</div>
+        </div>
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Basic CI</div>
+          <div class="step-desc">Optional CD, continuous integration</div>
+        </div>
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Automated Deployment</div>
+          <div class="step-desc">Deployment and retraining process</div>
+        </div>
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Lightweight Scalability</div>
+          <div class="step-desc">Optimization and load scaling</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:2vh; padding-top:2vh">
+      <div class="callout" style="border-left-color:rgba(255,255,255,.2)">
+        <div class="kicker" style="opacity:.5; margin-bottom:1vh">Key Consideration</div>
+        <div class="step-desc">— Security best practices</div>
+        <div class="step-desc">— Test and retraining strategy</div>
+        <div class="step-desc">— Deployment automation</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act III · Phase 3 : Orchestration &amp; Deployment</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide light" data-screen-label="15 Phase 4">
+  <div class="chrome">
+    <div>Act III · Phase 4</div>
+    <div>15 / 27</div>
+  </div>
+  <div class="frame grid-2-7-5" style="padding-top:5vh">
+    <div style="display:flex; flex-direction:column; justify-content:space-between; gap:3vh">
+      <div>
+        <div class="kicker">Phase 04</div>
+        <h2 class="h-xl" style="font-size:5vw">Monitoring<br>&amp; Maintenance</h2>
+        <p class="lead" style="margin-top:3vh">
+          Monitor performance, detect drift, and automate maintenance.
+        </p>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:2vh">
+        <div class="step">
+          <div class="step-title">Performance Monitoring</div>
+          <div class="step-desc">Automated dashboard</div>
+        </div>
+        <div class="step">
+          <div class="step-title">Drift Detection</div>
+          <div class="step-desc">Data drift, model drift</div>
+        </div>
+        <div class="step">
+          <div class="step-title">Alert System</div>
+          <div class="step-desc">Notifications and escalation</div>
+        </div>
+        <div class="step">
+          <div class="step-title">Retraining Process</div>
+          <div class="step-desc">Model maintenance and updates</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:2vh; padding-top:2vh">
+      <div class="callout">
+        <div class="kicker" style="opacity:.5; margin-bottom:1vh">Key Consideration</div>
+        <div class="step-desc">— Model performance</div>
+        <div class="step-desc">— Data quality</div>
+        <div class="step-desc">— System health</div>
+      </div>
+      <div class="step" style="margin-top:auto; border-top-color:rgba(127,127,127,.2)">
+        <div class="step-title" style="font-size:1.2vw">Nice to have</div>
+        <div class="step-desc">Simplified front-end (Streamlit, FastHTML...)</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act III · Phase 4 : Monitoring &amp; Maintenance</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide hero dark" data-screen-label="16 Section Architecture">
+  <div class="chrome">
+    <div>Act IV</div>
+    <div>16 / 27</div>
+  </div>
+  <div class="frame" style="display:grid; gap:6vh; align-content:center; min-height:80vh">
+    <div class="kicker">Act IV</div>
+    <h1 class="h-hero" style="font-size:8vw">Key<br>Architectural Principles</h1>
+    <p class="lead" style="max-width:50vw">
+      The technical foundations of your MLOps project.
+    </p>
+  </div>
+  <div class="foot">
+    <div>Act IV · Architecture</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide light" data-screen-label="17 Components">
+  <div class="chrome">
+    <div>Act IV · Stack</div>
+    <div>17 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:5vh">
+    <div class="kicker">Tech Stack</div>
+    <h2 class="h-xl">Key Components</h2>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:3vw; flex:1; align-content:start; margin-top:4vh">
+      <div class="pillar">
+        <div class="ic" style="opacity:.3; font-size:1.2vw">01</div>
+        <div class="t" style="font-size:1.6vw">Git &amp; GitHub</div>
+        <div class="d">Code versioning, collaboration and review.</div>
+      </div>
+      <div class="pillar">
+        <div class="ic" style="opacity:.3; font-size:1.2vw">02</div>
+        <div class="t" style="font-size:1.6vw">DVC / MLflow</div>
+        <div class="d">Experiment tracking and data versioning.</div>
+      </div>
+      <div class="pillar">
+        <div class="ic" style="opacity:.3; font-size:1.2vw">03</div>
+        <div class="t" style="font-size:1.6vw">Docker &amp; CI</div>
+        <div class="d">Service isolation and continuous integration.</div>
+      </div>
+      <div class="pillar">
+        <div class="ic" style="opacity:.3; font-size:1.2vw">04</div>
+        <div class="t" style="font-size:1.6vw">FastAPI</div>
+        <div class="d">Secured API with authentication.</div>
+      </div>
+      <div class="pillar">
+        <div class="ic" style="opacity:.3; font-size:1.2vw">05</div>
+        <div class="t" style="font-size:1.6vw">ZenML / Airflow</div>
+        <div class="d">ML pipeline orchestration.</div>
+      </div>
+      <div class="pillar">
+        <div class="ic" style="opacity:.3; font-size:1.2vw">06</div>
+        <div class="t" style="font-size:1.6vw">Prometheus + Grafana</div>
+        <div class="d">Monitoring and performance dashboard.</div>
+      </div>
+      <div class="pillar">
+        <div class="ic" style="opacity:.3; font-size:1.2vw">07</div>
+        <div class="t" style="font-size:1.6vw">Evidently</div>
+        <div class="d">Data drift detection.</div>
+      </div>
+      <div class="pillar">
+        <div class="ic" style="opacity:.3; font-size:1.2vw">08</div>
+        <div class="t" style="font-size:1.6vw">Streamlit</div>
+        <div class="d">Simplified front-end (nice to have).</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act IV · Tech Stack</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide dark" data-screen-label="18 Full-time Planning">
+  <div class="chrome">
+    <div>Act V · Planning</div>
+    <div>18 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:4vh">
+    <div class="kicker">Full-time Format</div>
+    <h2 class="h-xl" style="font-size:5vw">Timeline · 24 weeks</h2>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:2vw; flex:1; align-content:start; margin-top:3vh">
+      <div class="step" style="border-top:3px solid rgba(255,255,255,.5)">
+        <div class="step-nb">Wk 1-6</div>
+        <div class="step-title">Foundations</div>
+        <div class="step-desc">Environment, basic ML pipelines, start versioning, automated tests &amp; basic API</div>
+      </div>
+      <div class="step" style="border-top:3px solid rgba(255,255,255,.5)">
+        <div class="step-nb">Wk 7-12</div>
+        <div class="step-title">Microservices</div>
+        <div class="step-desc">Experiment tracking, data &amp; model versioning, pipeline orchestration</div>
+      </div>
+      <div class="step" style="border-top:3px solid rgba(255,255,255,.5)">
+        <div class="step-nb">Wk 13-18</div>
+        <div class="step-title">Orchestration</div>
+        <div class="step-desc">End-to-end orchestration, CI, scalability, API security</div>
+      </div>
+      <div class="step" style="border-top:3px solid rgba(255,255,255,.5)">
+        <div class="step-nb">Wk 19-22</div>
+        <div class="step-title">Monitoring</div>
+        <div class="step-desc">Monitoring, update procedures, documentation finalization</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act V · Full-time Planning</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide light" data-screen-label="19 Bootcamp Planning">
+  <div class="chrome">
+    <div>Act V · Planning</div>
+    <div>19 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:4vh">
+    <div class="kicker">Bootcamp Format</div>
+    <h2 class="h-xl" style="font-size:5vw">Timeline · 40 days</h2>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:2vw; flex:1; align-content:start; margin-top:3vh">
+      <div class="step" style="border-top:3px solid var(--ink)">
+        <div class="step-nb">Days 1-10</div>
+        <div class="step-title">Foundations</div>
+        <div class="step-desc">Environment, basic ML pipelines, versioning, automated tests &amp; API</div>
+      </div>
+      <div class="step" style="border-top:3px solid var(--ink)">
+        <div class="step-nb">Days 11-20</div>
+        <div class="step-title">Microservices</div>
+        <div class="step-desc">Experiment tracking, versioning, pipeline orchestration, microservices</div>
+      </div>
+      <div class="step" style="border-top:3px solid var(--ink)">
+        <div class="step-nb">Days 21-30</div>
+        <div class="step-title">Orchestration</div>
+        <div class="step-desc">End-to-end orchestration, CI, rollback, scalability, API security</div>
+      </div>
+      <div class="step" style="border-top:3px solid var(--ink)">
+        <div class="step-nb">Days 31-40</div>
+        <div class="step-title">Monitoring</div>
+        <div class="step-desc">Monitoring, update procedures, retraining finalization + documentation</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act V · Bootcamp Planning</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide hero light" data-screen-label="20 Section Best Practices">
+  <div class="chrome">
+    <div>Act VI</div>
+    <div>20 / 27</div>
+  </div>
+  <div class="frame" style="display:grid; gap:6vh; align-content:center; min-height:80vh">
+    <div class="kicker">Act VI</div>
+    <h1 class="h-hero" style="font-size:8.5vw">Best Practices</h1>
+    <p class="lead" style="max-width:50vw">
+      The golden rules for a successful MLOps project.
+    </p>
+  </div>
+  <div class="foot">
+    <div>Act VI · Best Practices</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide dark" data-screen-label="21 Best Practices 1">
+  <div class="chrome">
+    <div>Act VI · Practices</div>
+    <div>21 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:5vh">
+    <div class="kicker">Principles</div>
+    <h2 class="h-xl" style="font-size:5vw">Best Practices</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:5vw; flex:1; align-content:start; margin-top:4vh">
+      <div style="display:flex; flex-direction:column; gap:2.4vh">
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Reproducibility First</div>
+          <div class="step-desc">Containerized environments, pinned dependencies, fixed random seeds.</div>
+        </div>
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Systematic Versioning</div>
+          <div class="step-desc">Code, data, models and experiments versioned from day 1.</div>
+        </div>
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Automated Tests</div>
+          <div class="step-desc">Unit, integration and data validation tests.</div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:2.4vh">
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Living Documentation</div>
+          <div class="step-desc">README, technical docs, architecture — kept up to date with code.</div>
+        </div>
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Security by Design</div>
+          <div class="step-desc">Secured APIs, secrets management, principle of least privilege.</div>
+        </div>
+        <div class="step" style="border-top-color:rgba(255,255,255,.15)">
+          <div class="step-title">Monitoring from Day One</div>
+          <div class="step-desc">Don't wait until the end — metrics, alerts, dashboards from day 1.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act VI · Best Practices</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide light" data-screen-label="22 Best Practices 2">
+  <div class="chrome">
+    <div>Act VI · Practices</div>
+    <div>22 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:5vh">
+    <div class="kicker">Workflow</div>
+    <h2 class="h-xl" style="font-size:5vw">Work Organization</h2>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:4vw; flex:1; align-content:start; margin-top:4vh">
+      <div class="pillar">
+        <div class="ic"><i data-lucide="git-branch" class="ico-lg"></i></div>
+        <div class="t">Git Flow</div>
+        <div class="d">Protected branches, pull requests, systematic code review.</div>
+      </div>
+      <div class="pillar">
+        <div class="ic"><i data-lucide="repeat" class="ico-lg"></i></div>
+        <div class="t">CI / CD</div>
+        <div class="d">Continuous integration, automated deployment, planned rollback.</div>
+      </div>
+      <div class="pillar">
+        <div class="ic"><i data-lucide="users" class="ico-lg"></i></div>
+        <div class="t">Collaboration</div>
+        <div class="d">Synchronous code reviews, knowledge sharing, team rituals.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act VI · Organization</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide dark" data-screen-label="23 Best Practices 3">
+  <div class="chrome">
+    <div>Act VI · Practices</div>
+    <div>23 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:5vh">
+    <div class="kicker">Production</div>
+    <h2 class="h-xl" style="font-size:5vw">Production Deployment</h2>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:4vw; flex:1; align-content:start; margin-top:4vh">
+      <div class="pillar">
+        <div class="t" style="font-size:1.6vw">Progressive Deployment</div>
+        <div class="d">Canary, blue-green, feature flags — never deploy all at once.</div>
+      </div>
+      <div class="pillar">
+        <div class="t" style="font-size:1.6vw">Immediate Rollback</div>
+        <div class="d">Every deployment must be undoable in 1 click.</div>
+      </div>
+      <div class="pillar">
+        <div class="t" style="font-size:1.6vw">Observability</div>
+        <div class="d">Logs, metrics, traces — everything must be measurable.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Act VI · Production</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide hero light" data-screen-label="24 Q&A">
+  <div class="chrome">
+    <div>Q&A</div>
+    <div>24 / 27</div>
+  </div>
+  <div class="frame" style="display:grid; gap:8vh; align-content:center; min-height:80vh">
+    <div class="kicker">Q&A</div>
+    <h1 class="h-hero" style="font-size:12vw">QUESTIONS</h1>
+    <p class="lead" style="max-width:50vw; opacity:.65">
+      Any questions? Now or never.
+    </p>
+  </div>
+  <div class="foot">
+    <div>Q&A</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide hero dark" data-screen-label="25 Next Steps">
+  <div class="chrome">
+    <div>Final</div>
+    <div>25 / 27</div>
+  </div>
+  <div class="frame" style="display:grid; gap:6vh; align-content:center; min-height:80vh">
+    <div class="kicker">Final Act</div>
+    <h1 class="h-hero" style="font-size:8.5vw">Next Steps</h1>
+    <p class="lead" style="max-width:50vw">
+      What we do from here.
+    </p>
+  </div>
+  <div class="foot">
+    <div>Final · Next Steps</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide light" data-screen-label="26 Next Steps">
+  <div class="chrome">
+    <div>Final · Actions</div>
+    <div>26 / 27</div>
+  </div>
+  <div class="frame" style="padding-top:5vh">
+    <div class="kicker">Next Steps</div>
+    <h2 class="h-xl" style="margin-bottom:4vh">Next Steps</h2>
+    <div style="display:flex; flex-direction:column; gap:2.4vh; flex:1; align-content:start; margin-top:2vh">
+      <div class="step" style="grid-template-columns:auto 1fr; display:grid; gap:2vw; align-items:start; padding-top:2vh; border-top:1px solid rgba(127,127,127,.25)">
+        <div class="step-nb" style="font-size:1.6vw">01</div>
+        <div>
+          <div class="step-title">Set up the environment</div>
+          <div class="step-desc">Reproducible development environment for all members.</div>
+        </div>
+      </div>
+      <div class="step" style="grid-template-columns:auto 1fr; display:grid; gap:2vw; align-items:start; padding-top:2vh; border-top:1px solid rgba(127,127,127,.25)">
+        <div class="step-nb" style="font-size:1.6vw">02</div>
+        <div>
+          <div class="step-title">Basic ML Pipeline + API</div>
+          <div class="step-desc">Start with a simple ML pipeline and a prediction API.</div>
+        </div>
+      </div>
+      <div class="step" style="grid-template-columns:auto 1fr; display:grid; gap:2vw; align-items:start; padding-top:2vh; border-top:1px solid rgba(127,127,127,.25)">
+        <div class="step-nb" style="font-size:1.6vw">03</div>
+        <div>
+          <div class="step-title">Versioning &amp; Tests</div>
+          <div class="step-desc">Set up versioning and automated tests from the start.</div>
+        </div>
+      </div>
+      <div class="step" style="grid-template-columns:auto 1fr; display:grid; gap:2vw; align-items:start; padding-top:2vh; border-top:1px solid rgba(127,127,127,.25)">
+        <div class="step-nb" style="font-size:1.6vw">04</div>
+        <div>
+          <div class="step-title">Experiment Tracking</div>
+          <div class="step-desc">Set up experiment tracking as soon as possible.</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:auto; padding-top:2vh; border-top:2px solid var(--ink); display:flex; justify-content:space-between; align-items:center">
+      <div class="kicker" style="margin-bottom:0">Next meeting</div>
+      <div style="font-family:var(--serif-en); font-style:italic; font-size:1.8vw; opacity:.7">To be determined</div>
+    </div>
+  </div>
+  <div class="foot">
+    <div>Final · Next Steps</div>
+    <div>— · —</div>
+  </div>
+</section>
+
+<section class="slide hero dark" data-screen-label="27 Resources">
+  <div class="chrome">
+    <div>Final · Resources</div>
+    <div>27 / 27</div>
+  </div>
+  <div class="frame" style="display:grid; gap:5vh; align-content:center; min-height:80vh">
+    <div class="kicker">To Go Further</div>
+    <h1 class="h-hero" style="font-size:7.5vw">Resources</h1>
+    <div style="display:flex; flex-direction:column; gap:1.6vh; margin-top:2vh">
+      <div class="meta-row">
+        <span>github.com/ssime-git/mlops-boiler-plate</span>
+      </div>
+      <div class="meta-row">
+        <span>github.com/ssime-git/mlops_project_template</span>
+      </div>
+      <div class="meta-row">
+        <span>github.com/ssime-git/zenml_mlops_template</span>
+      </div>
+    </div>
+    <p class="lead" style="max-width:55vw; opacity:.6; font-size:1.4vw; margin-top:2vh">
+      Templates to start your MLOps project on solid foundations.
+    </p>
+  </div>
+  <div class="foot">
+    <div>Resources · Liora</div>
+    <div>END</div>
+  </div>
+</section>
+
+</div>
+
+<div id="nav"></div>
+
+<script>
+const VS = `attribute vec2 position;void main(){gl_Position=vec4(position,0.0,1.0);}`;
+
+const FS_DARK = `precision highp float;
+uniform vec2 u_resolution;uniform float u_time;uniform vec2 u_mouse;
+vec3 palette(float t,vec3 a,vec3 b,vec3 c,vec3 d){return a+b*cos(6.28318*(c*t+d));}
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_resolution.xy;
+  vec2 p=uv*2.0-1.0;p.x*=u_resolution.x/u_resolution.y;
+  vec2 m=u_mouse*2.0-1.0;m.x*=u_resolution.x/u_resolution.y;
+  float md=length(p-m);
+  float mr=sin(md*15.0-u_time*4.0)*exp(-md*3.0);p+=mr*0.08;
+  vec2 p0=p;
+  for(float i=1.0;i<4.0;i++){
+    p.x+=0.1/i*sin(i*3.0*p.y+u_time*0.4)+0.05;
+    p.y+=0.1/i*cos(i*2.0*p.x+u_time*0.3)-0.05;
+  }
+  float r=length(p);float ang=atan(p.y,p.x);
+  vec3 a=vec3(0.06,0.10,0.16);
+  vec3 b=vec3(0.04,0.04,0.05);
+  vec3 c=vec3(1.0,1.0,1.0);
+  vec3 d=vec3(0.08,0.15,0.32);
+  vec3 col=palette(r*1.5+p0.x*0.5+u_time*0.1,a,b,c,d);
+  float disp=sin(r*25.0-u_time*1.5+ang*2.0)*0.5+0.5;
+  col+=vec3(disp*0.022,disp*0.008,disp*0.003);
+  float hi=pow(sin(p.x*4.0+p.y*3.0+u_time)*0.5+0.5,8.0);
+  col+=hi*0.06;
+  vec3 base=vec3(0.04,0.06,0.09);
+  col=mix(base,col,0.85);
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+const FS_LIGHT = `precision highp float;
+uniform vec2 u_resolution;uniform float u_time;uniform vec2 u_mouse;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec2 p){
+  vec2 i=floor(p),f=fract(p);
+  float a=hash(i),b=hash(i+vec2(1,0));
+  float c=hash(i+vec2(0,1)),d=hash(i+vec2(1,1));
+  vec2 u=f*f*(3.0-2.0*f);
+  return mix(a,b,u.x)+(c-a)*u.y*(1.0-u.x)+(d-b)*u.x*u.y;
+}
+float fbm(vec2 p){
+  float v=0.0,a=0.5;
+  mat2 m=mat2(0.80,0.60,-0.60,0.80);
+  for(int i=0;i<5;i++){v+=a*noise(p);p=m*p*2.02;a*=0.5;}
+  return v;
+}
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_resolution.xy;
+  vec2 p=uv;p.x*=u_resolution.x/u_resolution.y;
+  vec2 m=u_mouse;m.x*=u_resolution.x/u_resolution.y;
+  vec2 md=p-m;float dl=length(md);
+  p+=normalize(md+vec2(0.0001))*exp(-dl*5.0)*0.03;
+  vec2 q=vec2(fbm(p*1.8+u_time*0.07),fbm(p*1.8+vec2(5.2,1.3)+u_time*0.06));
+  vec2 r=vec2(fbm(p*2.0+q*1.3+vec2(1.7,9.2)+u_time*0.05),
+              fbm(p*2.0+q*1.3+vec2(8.3,2.8)+u_time*0.04));
+  float f=fbm(p*2.2+r*1.5);
+  vec3 silverDark=vec3(0.88,0.88,0.90);
+  vec3 paper=vec3(0.965,0.965,0.968);
+  vec3 col=mix(silverDark,paper,f);
+  float ph=r.x*2.2+u_time*0.35;
+  col+=vec3(0.98,0.62,0.25)*sin(ph)*0.022;
+  col+=vec3(0.75,0.78,0.88)*sin(ph*0.8+2.0)*0.015;
+  float hl=smoothstep(0.48,0.92,f);
+  col+=hl*0.06;
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+const mouse={x:0.5,y:0.5};
+addEventListener('mousemove',e=>{mouse.x=e.clientX/innerWidth;mouse.y=e.clientY/innerHeight});
+
+function bootGL(canvasId, fsSrc){
+  const canvas=document.getElementById(canvasId);
+  const gl=canvas.getContext('webgl',{alpha:false,antialias:true});
+  if(!gl) return ()=>false;
+  const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);return sh};
+  const prog=gl.createProgram();
+  gl.attachShader(prog,mk(gl.VERTEX_SHADER,VS));
+  gl.attachShader(prog,mk(gl.FRAGMENT_SHADER,fsSrc));
+  gl.linkProgram(prog);gl.useProgram(prog);
+  const buf=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+  const pos=gl.getAttribLocation(prog,'position');
+  gl.enableVertexAttribArray(pos);gl.vertexAttribPointer(pos,2,gl.FLOAT,false,0,0);
+  const lRes=gl.getUniformLocation(prog,'u_resolution');
+  const lT=gl.getUniformLocation(prog,'u_time');
+  const lM=gl.getUniformLocation(prog,'u_mouse');
+  const resize=()=>{
+    const d=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=innerWidth*d;canvas.height=innerHeight*d;
+    gl.viewport(0,0,canvas.width,canvas.height);
+  };
+  addEventListener('resize',resize);resize();
+  return (tSec)=>{
+    gl.uniform2f(lRes,canvas.width,canvas.height);
+    gl.uniform1f(lT,tSec);
+    gl.uniform2f(lM,mouse.x,1-mouse.y);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+    return true;
+  };
+}
+const drawDark=bootGL('bg-dark',FS_DARK);
+const drawLight=bootGL('bg-light',FS_LIGHT);
+const t0=Date.now();
+(function loop(){
+  const t=(Date.now()-t0)/1000;
+  drawDark(t);drawLight(t);
+  requestAnimationFrame(loop);
+})();
+
+const deck=document.getElementById('deck');
+const slides=deck.querySelectorAll('.slide');
+const nav=document.getElementById('nav');
+let idx=0,total=slides.length,lock=false;
+
+deck.style.width=(total*100)+'vw';
+
+slides.forEach((s,i)=>{
+  const b=document.createElement('button');
+  b.className='dot';b.dataset.i=i;b.setAttribute('aria-label','Page '+(i+1));
+  b.onclick=()=>go(i);
+  nav.appendChild(b);
+});
+
+function go(n){
+  if(lock)return;
+  idx=Math.max(0,Math.min(total-1,n));
+  deck.style.transform=`translateX(${-idx*100}vw)`;
+  slides.forEach((s,i)=>s.classList.toggle('active',i===idx));
+  nav.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
+  const el=slides[idx];
+  const th=el.dataset.theme || (el.classList.contains('light')?'light':(el.classList.contains('dark')?'dark':'dark'));
+  document.body.classList.toggle('light-bg',th==='light');
+  lock=true;setTimeout(()=>lock=false,700);
+}
+
+let overviewOn=false;
+const ov=document.createElement('div');
+ov.id='overview';
+ov.style.cssText='position:fixed;inset:0;z-index:100;background:rgba(var(--ink-rgb),.92);backdrop-filter:blur(12px);display:none;overflow-y:auto;padding:4vh 4vw';
+document.body.appendChild(ov);
+
+function buildOverview(){
+  ov.innerHTML='';
+  const grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:2vh 1.6vw;max-width:90vw;margin:0 auto';
+  slides.forEach((s,i)=>{
+    const card=document.createElement('div');
+    card.style.cssText='cursor:pointer;border-radius:6px;overflow:hidden;border:2px solid '+(i===idx?'rgba(var(--paper-rgb),.8)':'rgba(var(--paper-rgb),.15)')+';transition:border-color .2s';
+    card.onmouseenter=()=>card.style.borderColor='rgba(var(--paper-rgb),.6)';
+    card.onmouseleave=()=>card.style.borderColor=i===idx?'rgba(var(--paper-rgb),.8)':'rgba(var(--paper-rgb),.15)';
+    const wrap=document.createElement('div');
+    wrap.style.cssText='width:100%;aspect-ratio:16/9;overflow:hidden;position:relative;pointer-events:none;background:'+(s.classList.contains('light')?'var(--paper)':'var(--ink)');
+    const clone=s.cloneNode(true);
+    clone.style.cssText='width:100vw;height:100vh;transform:scale('+(1/4.5)+');transform-origin:top left;position:absolute;top:0;left:0;pointer-events:none';
+    wrap.appendChild(clone);
+    const label=document.createElement('div');
+    label.style.cssText='padding:6px 10px;font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--paper);opacity:.7';
+    label.textContent=(i+1)+' / '+total;
+    card.appendChild(wrap);
+    card.appendChild(label);
+    card.onclick=()=>{toggleOverview();go(i)};
+    grid.appendChild(card);
+  });
+  ov.appendChild(grid);
+}
+
+function toggleOverview(){
+  overviewOn=!overviewOn;
+  if(overviewOn){buildOverview();ov.style.display='block';}
+  else{ov.style.display='none';}
+}
+
+addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();toggleOverview();return;}
+  if(overviewOn)return;
+  if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '||e.key==='ArrowDown')go(idx+1);
+  if(e.key==='ArrowLeft'||e.key==='PageUp'||e.key==='ArrowUp')go(idx-1);
+  if(e.key==='Home')go(0);
+  if(e.key==='End')go(total-1);
+});
+
+let wheelTO=null,wheelAcc=0;
+addEventListener('wheel',e=>{
+  wheelAcc+=e.deltaY+e.deltaX;
+  if(Math.abs(wheelAcc)>50){go(idx+(wheelAcc>0?1:-1));wheelAcc=0;}
+  clearTimeout(wheelTO);wheelTO=setTimeout(()=>wheelAcc=0,150);
+},{passive:true});
+
+let tx=0,ty=0;
+addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:true});
+addEventListener('touchend',e=>{
+  const dx=(e.changedTouches[0].clientX-tx);
+  const dy=(e.changedTouches[0].clientY-ty);
+  if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy))go(idx+(dx<0?1:-1));
+},{passive:true});
+
+go(0);
+</script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>lucide.createIcons();</script>
+</body>
+</html>
