@@ -22,13 +22,13 @@ jobs:
         run: uv sync --extra dev
         
       - name: Run tests
-        run: pytest tests/ --cov=ml_project
+        run: pytest tests/ --cov=src
         
       - name: Type check
-        run: mypy src/ml_project
+        run: mypy src/
         
       - name: Lint
-        run: ruff check src/ml_project
+        run: ruff check src/
 
   lint:
     runs-on: ubuntu-latest
@@ -45,7 +45,7 @@ jobs:
         run: uv sync --extra dev
         
       - name: Check formatting
-        run: black --check src/ml_project
+        run: black --check src/
         
       - name: Run ruff
-        run: ruff check src/ml_project
+        run: ruff check src/

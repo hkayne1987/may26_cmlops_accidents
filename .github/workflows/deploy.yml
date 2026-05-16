@@ -24,7 +24,7 @@ jobs:
         run: uv sync
         
       - name: Train model
-        run: python -m ml_project train --config configs/train.yaml
+        run: python -m training.train
         
       - name: Register model
         run: |
