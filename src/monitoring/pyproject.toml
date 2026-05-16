@@ -8,3 +8,6 @@ dependencies = [
     "evidently>=0.4.0",
     "common",
 ]
+
+[tool.uv.sources]
+common = { workspace = true }

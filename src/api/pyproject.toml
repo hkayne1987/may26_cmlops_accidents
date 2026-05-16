@@ -11,3 +11,6 @@ dependencies = [
     "numpy>=1.24.0",
     "common",
 ]
+
+[tool.uv.sources]
+common = { workspace = true }

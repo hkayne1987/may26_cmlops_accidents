@@ -19,8 +19,8 @@ jobs:
         run: uv python install 3.10
         
       - name: Install dependencies
-        run: uv sync --extra dev
-        
+        run: uv sync
+
       - name: Run tests
         run: pytest tests/ --cov=src
         
@@ -42,10 +42,10 @@ jobs:
         run: uv python install 3.10
         
       - name: Install dependencies
-        run: uv sync --extra dev
-        
+        run: uv sync
+
       - name: Check formatting
-        run: black --check src/
+        run: ruff format --check src/
         
       - name: Run ruff
         run: ruff check src/
