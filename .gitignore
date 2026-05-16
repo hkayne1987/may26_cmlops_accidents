@@ -59,5 +59,8 @@ metrics/
 .ruff_cache/
 .venv/
 
+# Generated documents
+*.pdf
+
 # Environment
 .env
