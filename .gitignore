@@ -30,9 +30,6 @@ data/raw/
 data/processed/
 data/features/
 
-# Models (versioned via MLflow/DVC)
-models/
-
 # ML artifacts
 mlruns/
 artifacts/
