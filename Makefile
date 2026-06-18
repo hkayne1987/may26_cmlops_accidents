@@ -31,3 +31,6 @@ mlflow:
 
 requirements:
 	uv export -o requirements.txt
+
+preprocess:
+	python -m src.data.preprocess
