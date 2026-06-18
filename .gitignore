@@ -67,3 +67,4 @@ metrics/
 !data/raw/
 !data/raw/*.csv
 !docs/description*.pdf
+!data/processed
