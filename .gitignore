@@ -61,3 +61,10 @@ metrics/
 
 # Environment
 .env
+
+
+# Phase 1 : données versionnées dans Git (DVC viendra en phase 2)
+!data/raw/
+!data/raw/*.csv
+!docs/description*.pdf
+!data/processed
