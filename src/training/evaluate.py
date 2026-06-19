@@ -1,98 +1,93 @@
 """
-Evaluation module.
-Run via: python -m training evaluate
-Or with custom config: python -m training evaluate model.path=models/custom_model.joblib
+Évaluation du modèle de gravité des accidents.
+Charge le modèle entraîné (models/) et le jeu de test (data/processed/test.parquet),
+calcule les métriques et le compromis precision/recall selon le seuil.
+
+Exécution : python -m src.training.evaluate
 """
 
 import json
 import logging
 from pathlib import Path
 
-import hydra
 import joblib
-import mlflow
 import pandas as pd
-from omegaconf import DictConfig, OmegaConf
-from sklearn.metrics import accuracy_score, precision_score, recall_score
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, precision_score, recall_score, f1_score
 
+from src.data.preprocess import build_feature_matrix
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
+# --- Configuration ------------------------------------------------------------
+TEST_PATH = Path("data/processed/test.parquet")
+MODEL_PATH = Path("models/xgb_gravite.joblib")
+METRICS_PATH = Path("models/metrics.json")
+DECISION_THRESHOLD = 0.30   # seuil retenu (favorise le recall sur la classe grave)
 
-@hydra.main(version_base=None, config_path="configs", config_name="evaluate")
-def evaluate(cfg: DictConfig):
-    """Evaluate a model using Hydra configuration."""
-    # Log the configuration
-    log.info(f"Evaluation configuration:\n{OmegaConf.to_yaml(cfg)}")
 
-    # Start MLflow run
-    mlflow.set_experiment(cfg.mlflow.experiment_name)
-    with mlflow.start_run(run_name="evaluation"):
-        # Load model
-        model_path = Path(cfg.model.path)
-        if not model_path.exists():
-            log.error(f"Model not found: {model_path}")
-            return
+def load_test() -> pd.DataFrame:
+    if not TEST_PATH.exists():
+        raise FileNotFoundError(f"Jeu de test introuvable : {TEST_PATH}. "
+                                f"Lance d'abord `python -m src.data.preprocess`.")
+    df = pd.read_parquet(TEST_PATH)
+    log.info(f"Test chargé : {df.shape[0]} lignes")
+    return df
 
-        log.info(f"Loading model from: {model_path}")
-        model = joblib.load(model_path)
 
-        # Load test data
-        test_path = Path(cfg.data.test_path)
-        if not test_path.exists():
-            log.warning(f"Test data not found: {test_path}, using train data instead")
-            test_path = Path(cfg.data.train_path)
+def load_model():
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(f"Modèle introuvable : {MODEL_PATH}. "
+                                f"Lance d'abord `python -m src.training.train`.")
+    return joblib.load(MODEL_PATH)
 
-        df = pd.read_csv(test_path)
-        log.info(f"Loaded test data: {df.shape}")
 
-        # Separate features and target
-        if "target" not in df.columns:
-            log.warning("No 'target' column found. Using last column as target.")
-            x = df.iloc[:, :-1]
-            y = df.iloc[:, -1]
-        else:
-            x = df.drop(columns=["target"])
-            y = df["target"]
+def evaluate(model, X_test, y_test, threshold: float = DECISION_THRESHOLD) -> dict:
+    """Évalue le modèle au seuil donné + AUC (indépendant du seuil)."""
+    y_proba = model.predict_proba(X_test)[:, 1]
+    y_pred = (y_proba >= threshold).astype(int)
 
-        # Make predictions
-        y_pred = model.predict(x)
+    auc = roc_auc_score(y_test, y_proba)
+    log.info(f"\n=== Rapport (seuil = {threshold}) ===\n"
+             + classification_report(y_test, y_pred, target_names=["non grave", "grave"]))
+    log.info(f"Matrice de confusion :\n{confusion_matrix(y_test, y_pred)}")
+    log.info(f"AUC-ROC : {auc:.3f}")
 
-        # Calculate metrics (placeholder - adapt to your problem type)
-        metrics = {}
-        try:
-            metrics["accuracy"] = accuracy_score(y, y_pred)
-        except Exception as e:
-            log.warning(f"Could not calculate accuracy: {e}")
+    return {
+        "threshold": threshold,
+        "auc_roc": round(auc, 4),
+        "recall_grave": round(recall_score(y_test, y_pred), 4),
+        "precision_grave": round(precision_score(y_test, y_pred), 4),
+        "f1_grave": round(f1_score(y_test, y_pred), 4),
+    }
 
-        try:
-            metrics["precision"] = precision_score(
-                y, y_pred, average="weighted", zero_division=0
-            )
-        except Exception as e:
-            log.warning(f"Could not calculate precision: {e}")
 
-        try:
-            metrics["recall"] = recall_score(
-                y, y_pred, average="weighted", zero_division=0
-            )
-        except Exception as e:
-            log.warning(f"Could not calculate recall: {e}")
-
-        # Log metrics
-        log.info(f"Evaluation metrics: {metrics}")
-        for metric_name, value in metrics.items():
-            mlflow.log_metric(metric_name, value)
-
-        # Save metrics to file
-        output_path = Path(cfg.metrics.output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(output_path, "w") as f:
-            json.dump(metrics, f, indent=2)
-
-        log.info(f"Metrics saved to: {output_path}")
-        log.info("Evaluation completed successfully!")
+def threshold_search(model, X_test, y_test):
+    """Balaye plusieurs seuils pour trouver le compromis precision/recall."""
+    y_proba = model.predict_proba(X_test)[:, 1]
+    log.info("\n=== Balayage de seuils ===")
+    rows = []
+    for t in [0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7]:
+        y_pred = (y_proba >= t).astype(int)
+        r = recall_score(y_test, y_pred)
+        p = precision_score(y_test, y_pred)
+        f = f1_score(y_test, y_pred)
+        log.info(f"seuil={t:.2f} | recall={r:.3f} | precision={p:.3f} | f1={f:.3f}")
+        rows.append({"threshold": t, "recall": round(r, 4),
+                     "precision": round(p, 4), "f1": round(f, 4)})
+    return rows
 
 
 if __name__ == "__main__":
-    evaluate()
+    df = load_test()
+    X_test, y_test, _ = build_feature_matrix(df)
+
+    model = load_model()
+    metrics = evaluate(model, X_test, y_test)
+    threshold = threshold_search(model, X_test, y_test)
+
+    # Sauvegarde des métriques
+    METRICS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(METRICS_PATH, "w") as f:
+        json.dump({"main": metrics, "threshold_search": threshold}, f, indent=2)
+    log.info(f"\nMétriques sauvegardées : {METRICS_PATH}")
