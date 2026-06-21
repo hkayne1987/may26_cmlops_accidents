@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from sklearn.model_selection import GroupShuffleSplit
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
@@ -11,6 +13,11 @@ PROCESSED_DIR = Path("data/processed")
 YEARS = [2019, 2020, 2021, 2022, 2023, 2024]
 SEP = ";"
 TABLES = ["caracteristiques", "lieux", "vehicules", "usagers"]
+
+TEST_SIZE = 0.2
+RANDOM_STATE = 0
+TRAIN_PATH = PROCESSED_DIR / "train.parquet"
+TEST_PATH = PROCESSED_DIR / "test.parquet"
 
 # --- Définition des variables numériques (le reste sera catégoriel) -----------
 NUMERIC_FEATURES = ["age", "heure", "minute", "jour", "mois", "an",
@@ -161,6 +168,31 @@ def build_feature_matrix(df: pd.DataFrame):
              f"{len([c for c in NUMERIC_FEATURES if c in X.columns])} numériques")
     return X, y, groups
 
+
+def split_train_test(df: pd.DataFrame):
+    """Split groupé par accident : tous les usagers d'un accident vont dans le même groupe (train ou test).
+
+    Retourne (df_train, df_test).
+    """
+    groups = df["Num_Acc"]
+    splitter = GroupShuffleSplit(n_splits=1, test_size=TEST_SIZE, random_state=RANDOM_STATE)
+    train_idx, test_idx = next(splitter.split(df, df["grave"], groups=groups))
+
+    df_train = df.iloc[train_idx].reset_index(drop=True)
+    df_test = df.iloc[test_idx].reset_index(drop=True)
+
+    # Vérification si accidents partagés entre train et test
+    overlap = set(df_train["Num_Acc"]) & set(df_test["Num_Acc"])
+    if overlap:
+        raise ValueError(f"Fuite : {len(overlap)} accidents dans train ET test.")
+
+    log.info(f"Split | train {len(df_train)} usagers ({df_train['Num_Acc'].nunique()} acc.) "
+             f"/ test {len(df_test)} usagers ({df_test['Num_Acc'].nunique()} acc.)")
+    log.info(f"Split | proportion 'grave' — train {df_train['grave'].mean():.1%} "
+             f"/ test {df_test['grave'].mean():.1%}")
+    return df_train, df_test
+
+
 def preprocess_all():
     """Charge, fusionne et prétraite toutes les années, concatène le tout
     et écrit le dataset final dans data/processed/.
@@ -177,13 +209,15 @@ def preprocess_all():
     full = pd.concat(frames, ignore_index=True)
     log.info(f"Concaténation : {full.shape[0]} usagers sur {len(YEARS)} années")
 
-    # Écriture du dataset complet (grain usager, avant séparation X/y)
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = PROCESSED_DIR / "accidents_usagers.parquet"
-    full.to_parquet(out_path, index=False)
-    log.info(f"Dataset écrit : {out_path} ({out_path.stat().st_size / 1e6:.1f} Mo)")
+    df_train, df_test = split_train_test(full)
 
-    return full
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    df_train.to_parquet(TRAIN_PATH, index=False)
+    df_test.to_parquet(TEST_PATH, index=False)
+    log.info(f"Écrit : {TRAIN_PATH} ({TRAIN_PATH.stat().st_size / 1e6:.1f} Mo)")
+    log.info(f"Écrit : {TEST_PATH} ({TEST_PATH.stat().st_size / 1e6:.1f} Mo)")
+
+    return df_train, df_test
 
 
 if __name__ == "__main__":
