@@ -156,12 +156,6 @@ def build_feature_matrix(df: pd.DataFrame):
                 X[c] = pd.to_numeric(X[c].str.replace(",", ".", regex=False), errors="coerce")
             else:
                 X[c] = pd.to_numeric(X[c], errors="coerce")
-    
-    for c in categorical_features:
-        if X[c].dtype == "object":
-            X[c] = X[c].str.strip().astype("category")
-        else:
-            X[c] = X[c].astype("category")
 
     log.info(f"build_feature_matrix | X={X.shape}, "
              f"{len(categorical_features)} catégorielles, "
@@ -208,6 +202,13 @@ def preprocess_all():
 
     full = pd.concat(frames, ignore_index=True)
     log.info(f"Concaténation : {full.shape[0]} usagers sur {len(YEARS)} années")
+    
+    # Fixer les catégories sur l'ensemble complet, avant le split, pour garantir
+    # que train et test partagent le même schéma de features
+    # (XGBoost categorical rejette toute catégorie vue au test mais absente du train).
+    categorical_cols = [c for c in full.columns if c not in NUMERIC_FEATURES and c not in DROP_COLS]
+    for c in categorical_cols:
+        full[c] = full[c].astype(str).str.strip().astype("category")
 
     df_train, df_test = split_train_test(full)
 
