@@ -22,11 +22,15 @@ deployment, monitoring) rather than on modeling performance.
 git clone https://github.com/hkayne1987/may26_cmlops_accidents.git
 cd may26_cmlops_accidents
 
-python3 -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
+## Install UV if you don't have it:
+brew install uv           #bash
+or 
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-pip install --upgrade pip
-pip install pandas numpy scikit-learn xgboost pyarrow
+## Create the virtual environment
+uv venv
+source .venv/bin/activate
+uv sync 
 ```
 
 > macOS note: XGBoost requires the OpenMP runtime. If you hit a
