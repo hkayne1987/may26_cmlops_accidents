@@ -1,159 +1,99 @@
-# MLOps Project Accidents
+# Road Accident Severity Prediction (BAAC)
 
-This repository provides a Machine Learning projects for Accidents project.
+MLOps project predicting the severity of road accidents in France from the
+public BAAC dataset. The goal is to expose a trained classifier through an API;
+the focus of the project is on the MLOps lifecycle (reproducible pipeline,
+deployment, monitoring) rather than on modeling performance.
 
-## 🏗 Project Architecture
+**Target:** binary classification — `grave` (killed or hospitalized) vs
+`non grave` (unharmed or slightly injured).
+**Scope:** BAAC 2019–2024 (homogeneous schema after the 2019 TRAxy reform).
+**Grain:** one row per road user involved in an accident.
 
-```mermaid
-graph TD
-    subgraph Client_Layer
-        User([User/Client])
-    end
+## Requirements
 
-    subgraph Deployment_Layer
-        Gateway[API Gateway / JWT]
-        API[FastAPI Service]
-    end
+- Python 3.9+
+- A virtual environment (standard `venv` for now; dependency management with `uv` will be added later)
 
-    subgraph Orchestration_Layer
-        Prefect[Prefect/Airflow]
-    end
-
-    subgraph Data_Model_Management
-        DVC[DVC / MinIO]
-        MLflow[MLflow Tracking]
-    end
-
-    subgraph Monitoring_Layer
-        Prom[Prometheus]
-        Graf[Grafana]
-        Evid[Evidently AI]
-    end
-
-    User --> Gateway
-    Gateway --> API
-    Prefect --> API
-    Prefect --> DVC
-    Prefect --> MLflow
-    API --> MLflow
-    API --> Prom
-    Prom --> Graf
-    Evid --> Graf
-```
-
-## 🚀 Quick Start
-
-### 1. Prerequisites
-- [UV](https://astral.sh/uv) (Fast Python package manager)
-- [Docker & Docker Compose](https://docs.docker.com/)
-
-### 2. Installation
-```bash
-# Clone the repo
-git clone <your-repo-url>
-cd mlops-project
-
-# Sync dependencies (dev deps are included automatically)
-uv sync
-```
-
-### 3. Running the project
-This project is built progressively. Depending on your current phase:
-
-- **Phase 1 (API only):**
-  ```bash
-  docker-compose up api -d
-  ```
-- **Phase 2-4 (Full Stack):**
-  ```bash
-  docker-compose up -d
-  ```
-
-## 📖 Methodology & Roadmap
-
-The project is designed to be built in 4 iterative phases. For a detailed step-by-step guide, please refer to the documentation:
-
-- 🇫🇷 [French Version](./docs/00_project_methodology_fr.md)
-- 🇬🇧 [English Version](./docs/00_project_methodology_en.md)
-
-## 🔧 Hydra Configuration
-
-This project uses [Hydra](https://hydra.cc/) for managing configurations. Configs are located in the `configs/` directory.
-
-### Configuration Files
-
-| Config File | Purpose |
-|-------------|----------|
-| `train.yaml` | Training pipeline configuration |
-| `evaluate.yaml` | Model evaluation configuration |
-| `preprocess.yaml` | Data preprocessing configuration |
-| `drift.yaml` | Drift detection configuration |
-| `problem.yaml` | Problem framing and business metrics |
-| `model/*.yaml` | Model-specific hyperparameters |
-| `preprocessing/*.yaml` | Preprocessing settings |
-
-### Basic Usage
-
-Each module can be run with Hydra using `python -m`:
+## Installation
 
 ```bash
-# Preprocess data
-python -m training.preprocess
+git clone https://github.com/hkayne1987/may26_cmlops_accidents.git
+cd may26_cmlops_accidents
 
-# Train model
-python -m training.train
+## Install UV if you don't have it:
+brew install uv           #bash
+or 
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Evaluate model
-python -m training.evaluate
-
-# Detect drift
-python -m monitoring.detection
+## Create the virtual environment
+uv venv
+source .venv/bin/activate
+uv sync 
 ```
 
-### Overriding Config Values
+> macOS note: XGBoost requires the OpenMP runtime. If you hit a
+> `libxgboost.dylib could not be loaded` error, run `brew install libomp`.
 
-Override any config value from the command line:
+## Data
+
+The BAAC data is **not** versioned in this repo and must be downloaded manually
+from [data.gouv.fr](https://www.data.gouv.fr/datasets/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/).
+
+For each year **2019 to 2024**, download the 4 CSV files and place them in
+`data/raw/` using the naming scheme `type-year.csv`:
+
+data/raw/  
+├── caracteristiques-2019.csv  
+├── lieux-2019.csv  
+├── vehicules-2019.csv  
+├── usagers-2019.csv  
+└── ... (through 2024 — 24 files total)
+
+The variable description PDF is in `docs/`.
+
+## Pipeline
+
+The pipeline runs in three steps:
 
 ```bash
-# Override model hyperparameters
-python -m training.train model.n_estimators=200 model.max_depth=15
-
-# Override multiple values
-python -m training.train model=lightgbm training.cv_folds=10
-
-# Override preprocessing
-python -m training.preprocess preprocessing.test_size=0.3 preprocessing.scale_features=false
-
-# Override drift threshold
-python -m monitoring.detection drift.threshold=0.3
+make preprocess   # load, merge and clean the 4 tables -> data/processed/{train,test}.parquet
+make train        # train XGBoost on train.parquet -> models/
+make evaluate     # evaluate on test.parquet, write models/metrics.json
 ```
 
-### Using Different Config Groups
+Equivalent direct commands:
 
 ```bash
-# Use a different model configuration
-python -m training.train model=lightgbm
-
-# Use a different preprocessing config
-python -m training.preprocess preprocessing=advanced
+python -m src.data.preprocess
+python -m src.training.train
+python -m src.training.evaluate
 ```
 
-### Multi-run with Hydra
-
-Run experiments with different configurations:
+Optional flags for training:
 
 ```bash
-# Run training with different models
-python -m training.train --multirun model=lightgbm,xgboost,randomforest
+make train-sample   # train on a small subsample (quick test)
+make tune           # run hyperparameter search (long)
+make tune-sample    # run hyperparameter search on a subsample (quick test)
 ```
 
-## 📂 Project Structure Recap
-- `src/api/`: FastAPI inference code.
-- `src/training/`: Training, preprocessing and evaluation scripts.
-- `src/monitoring/`: Drift detection and observability logic.
-- `src/common/`: Shared utilities used by all packages.
-- `deployment/`: Infrastructure configs (Prometheus, Grafana).
-- `docker/`: Dockerfiles for each service.
-- `configs/`: Problem framing and Hydra configurations.
-- `data/`: DVC-managed data folders.
-- `reports/`: Generated drift and evaluation reports (HTML).
+## Project structure
+
+`src/data/`: Load, merge BAAC tables, build target, feature engineering and train/test split  
+`src/train/`: Train, save model + feature schema, metrics calculation and threshold search
+`data/`: Raw BAAC CSVs (downloaded manually), train.parquet / test.parquet
+`models/`: Trained model + metrics
+`docs/`: PDF explaining features
+
+## Methodology notes
+
+Key choices:
+
+- **Binary target** to absorb the known label noise on the
+  hospitalized/slightly-injured boundary since the 2018 reform.
+- **2019+ only** to keep a consistent schema (the BAAC format changed in 2019).
+- **Group-aware split** (`GroupShuffleSplit` on `Num_Acc`) so that all users of
+  the same accident stay on the same side, preventing leakage.
+- **Schema drift handled across years** (e.g. `Accident_Id` → `Num_Acc` in 2022,
+  `num_veh` not unique in some years — joins use `id_vehicule`).

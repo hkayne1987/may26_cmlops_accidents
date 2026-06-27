@@ -1,0 +1,71 @@
+{
+  "main": {
+    "threshold": 0.3,
+    "auc_roc": 0.8759,
+    "recall_grave": 0.9029,
+    "precision_grave": 0.3706,
+    "f1_grave": 0.5255
+  },
+  "threshold_search": [
+    {
+      "threshold": 0.2,
+      "recall": 0.9489,
+      "precision": 0.3189,
+      "f1": 0.4774
+    },
+    {
+      "threshold": 0.25,
+      "recall": 0.9269,
+      "precision": 0.3456,
+      "f1": 0.5034
+    },
+    {
+      "threshold": 0.3,
+      "recall": 0.9029,
+      "precision": 0.3706,
+      "f1": 0.5255
+    },
+    {
+      "threshold": 0.35,
+      "recall": 0.8785,
+      "precision": 0.3947,
+      "f1": 0.5447
+    },
+    {
+      "threshold": 0.4,
+      "recall": 0.8511,
+      "precision": 0.4171,
+      "f1": 0.5599
+    },
+    {
+      "threshold": 0.45,
+      "recall": 0.8208,
+      "precision": 0.4409,
+      "f1": 0.5736
+    },
+    {
+      "threshold": 0.5,
+      "recall": 0.7879,
+      "precision": 0.4657,
+      "f1": 0.5854
+    },
+    {
+      "threshold": 0.55,
+      "recall": 0.7503,
+      "precision": 0.4911,
+      "f1": 0.5936
+    },
+    {
+      "threshold": 0.6,
+      "recall": 0.707,
+      "precision": 0.5178,
+      "f1": 0.5977
+    },
+    {
+      "threshold": 0.7,
+      "recall": 0.5953,
+      "precision": 0.5802,
+      "f1": 0.5876
+    }
+  ]
+}

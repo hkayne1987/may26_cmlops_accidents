@@ -30,9 +30,6 @@ data/raw/
 data/processed/
 data/features/
 
-# Models (versioned via MLflow/DVC)
-models/
-
 # ML artifacts
 mlruns/
 artifacts/
@@ -64,3 +61,10 @@ metrics/
 
 # Environment
 .env
+
+
+# Phase 1 : données versionnées dans Git (DVC viendra en phase 2)
+!data/raw/
+!data/raw/*.csv
+!docs/description*.pdf
+!data/processed
