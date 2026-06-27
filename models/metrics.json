@@ -1,71 +1,71 @@
 {
   "main": {
     "threshold": 0.3,
-    "auc_roc": 0.8653,
-    "recall_grave": 0.8815,
-    "precision_grave": 0.3758,
-    "f1_grave": 0.527
+    "auc_roc": 0.8759,
+    "recall_grave": 0.9029,
+    "precision_grave": 0.3706,
+    "f1_grave": 0.5255
   },
   "threshold_search": [
     {
       "threshold": 0.2,
-      "recall": 0.9354,
-      "precision": 0.3226,
-      "f1": 0.4798
+      "recall": 0.9489,
+      "precision": 0.3189,
+      "f1": 0.4774
     },
     {
       "threshold": 0.25,
-      "recall": 0.9101,
-      "precision": 0.3502,
-      "f1": 0.5058
+      "recall": 0.9269,
+      "precision": 0.3456,
+      "f1": 0.5034
     },
     {
       "threshold": 0.3,
-      "recall": 0.8815,
-      "precision": 0.3758,
-      "f1": 0.527
+      "recall": 0.9029,
+      "precision": 0.3706,
+      "f1": 0.5255
     },
     {
       "threshold": 0.35,
-      "recall": 0.851,
-      "precision": 0.4002,
-      "f1": 0.5444
+      "recall": 0.8785,
+      "precision": 0.3947,
+      "f1": 0.5447
     },
     {
       "threshold": 0.4,
-      "recall": 0.8194,
-      "precision": 0.4237,
-      "f1": 0.5586
+      "recall": 0.8511,
+      "precision": 0.4171,
+      "f1": 0.5599
     },
     {
       "threshold": 0.45,
-      "recall": 0.7856,
-      "precision": 0.4472,
-      "f1": 0.57
+      "recall": 0.8208,
+      "precision": 0.4409,
+      "f1": 0.5736
     },
     {
       "threshold": 0.5,
-      "recall": 0.7474,
-      "precision": 0.4695,
-      "f1": 0.5767
+      "recall": 0.7879,
+      "precision": 0.4657,
+      "f1": 0.5854
     },
     {
       "threshold": 0.55,
-      "recall": 0.7046,
-      "precision": 0.4933,
-      "f1": 0.5803
+      "recall": 0.7503,
+      "precision": 0.4911,
+      "f1": 0.5936
     },
     {
       "threshold": 0.6,
-      "recall": 0.6562,
-      "precision": 0.5202,
-      "f1": 0.5803
+      "recall": 0.707,
+      "precision": 0.5178,
+      "f1": 0.5977
     },
     {
       "threshold": 0.7,
-      "recall": 0.5354,
-      "precision": 0.5766,
-      "f1": 0.5552
+      "recall": 0.5953,
+      "precision": 0.5802,
+      "f1": 0.5876
     }
   ]
 }
