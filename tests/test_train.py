@@ -1,185 +1,81 @@
-"""Unit tests for the training module."""
+"""Unit tests for src/training/train.py."""
 
 import sys
+import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from omegaconf import DictConfig
 
-# Add src directory to path to import training modules
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+# Provide a fake xgboost module when it is not installed.
+xgboost_module = types.ModuleType("xgboost")
+xgboost_module.XGBClassifier = MagicMock()
+sys.modules.setdefault("xgboost", xgboost_module)
 
-@pytest.fixture
-def sample_config():
-    """Create a sample Hydra configuration for training."""
-    return DictConfig({
-        "data": {"processed_path": "data/processed/train.csv"},
-        "model": {
-            "name": "RandomForestClassifier",
-            "n_estimators": 10,
-            "max_depth": 5,
-            "random_state": 42,
-        },
-        "mlflow": {"experiment_name": "test-experiment"},
-    })
+import training.train as train_module
 
 
-@pytest.fixture
-def sample_train_data(tmp_path):
-    """Create sample training data."""
-    data = pd.DataFrame({
-        "feature1": [1.0, 2.0, 3.0, 4.0, 5.0],
-        "feature2": [2.0, 4.0, 6.0, 8.0, 10.0],
-        "target": [0, 1, 0, 1, 0],
-    })
-    csv_path = tmp_path / "train.csv"
-    data.to_csv(csv_path, index=False)
-    return str(csv_path), data
+def test_load_train_missing_file(monkeypatch):
+    fake_path = MagicMock()
+    fake_path.exists.return_value = False
+    monkeypatch.setattr(train_module, "TRAIN_PATH", fake_path)
+
+    with pytest.raises(FileNotFoundError):
+        train_module.load_train()
 
 
-class TestTrainModule:
-    """Test cases for the training train module."""
+@patch.object(train_module, "XGBClassifier")
+def test_train_model_trains(mock_xgb):
+    X_train = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    y_train = pd.Series([0, 1, 0])
 
-    def test_train_module_imports(self):
-        """Test that train module can be imported."""
-        try:
-            from training.train import train
-            assert callable(train)
-        except ImportError:
-            pytest.skip("training module not available")
+    mock_model = MagicMock()
+    mock_xgb.return_value = mock_model
 
-    @patch("training.train.mlflow")
-    @patch("training.train.Path")
-    def test_train_missing_data_file(self, mock_path, mock_mlflow, sample_config):
-        """Test training returns early when data file is missing."""
-        from training.train import train
+    model = train_module.train_model(X_train, y_train)
 
-        mock_path_obj = MagicMock()
-        mock_path_obj.exists.return_value = False
-        mock_path.return_value = mock_path_obj
+    mock_xgb.assert_called_once()
+    mock_model.fit.assert_called_once_with(X_train, y_train)
+    assert model is mock_model
 
-        result = train(sample_config)
-        assert result is None
+    call_kwargs = mock_xgb.call_args.kwargs
+    assert call_kwargs["enable_categorical"] is True
+    assert call_kwargs["tree_method"] == "hist"
+    assert call_kwargs["eval_metric"] == "logloss"
+    assert call_kwargs["random_state"] == train_module.RANDOM_STATE
 
-    @patch("training.train.mlflow")
-    @patch("training.train.RandomForestClassifier")
-    @patch("training.train.joblib")
-    def test_train_creates_and_fits_model(self, mock_joblib, mock_rf, mock_mlflow, sample_config):
-        """Test that train creates and fits a RandomForest model."""
-        from training.train import train
 
-        data = pd.DataFrame({
-            "feature1": [1.0, 2.0, 3.0],
-            "feature2": [2.0, 4.0, 6.0],
-            "target": [0, 1, 0],
-        })
+@patch.object(train_module, "XGBClassifier")
+def test_train_model_scale_pos_weight(mock_xgb):
+    X_train = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8]})
+    y_train = pd.Series([0, 0, 1, 1])
 
-        mock_model = MagicMock()
-        mock_rf.return_value = mock_model
+    mock_model = MagicMock()
+    mock_xgb.return_value = mock_model
 
-        with patch("training.train.Path") as mock_path:
-            mock_path_obj = MagicMock()
-            mock_path_obj.exists.return_value = True
-            mock_path_obj.mkdir = MagicMock()
-            mock_path.return_value = mock_path_obj
+    train_module.train_model(X_train, y_train)
 
-            with patch("training.train.pd.read_csv", return_value=data):
-                train(sample_config)
+    call_kwargs = mock_xgb.call_args.kwargs
+    assert call_kwargs["scale_pos_weight"] == 1.0
 
-                # Verify model creation
-                mock_rf.assert_called_once_with(
-                    n_estimators=10,
-                    max_depth=5,
-                    random_state=42,
-                )
 
-                # Verify model fitting
-                assert mock_model.fit.called
+def test_save_model_writes_files(monkeypatch, tmp_path):
+    model = MagicMock()
+    X_train = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
 
-    @patch("training.train.mlflow")
-    @patch("training.train.RandomForestClassifier")
-    @patch("training.train.joblib")
-    def test_train_saves_model(self, mock_joblib, mock_rf, mock_mlflow, sample_config):
-        """Test that trained model is saved using joblib."""
-        from training.train import train
+    monkeypatch.setattr(train_module, "MODEL_DIR", tmp_path)
 
-        data = pd.DataFrame({
-            "feature1": [1.0, 2.0],
-            "feature2": [2.0, 4.0],
-            "target": [0, 1],
-        })
+    dump_mock = MagicMock()
+    monkeypatch.setattr(train_module.joblib, "dump", dump_mock)
 
-        mock_model = MagicMock()
-        mock_rf.return_value = mock_model
+    to_json_mock = MagicMock()
+    monkeypatch.setattr(train_module.pd.Series, "to_json", to_json_mock)
 
-        with patch("training.train.Path") as mock_path:
-            mock_path_obj = MagicMock()
-            mock_path_obj.exists.return_value = True
-            mock_path_obj.mkdir = MagicMock()
-            mock_path.return_value = mock_path_obj
+    train_module.save_model(model, X_train)
 
-            with patch("training.train.pd.read_csv", return_value=data):
-                train(sample_config)
+    dump_mock.assert_called_once()
+    assert to_json_mock.called
 
-                # Verify model is saved
-                assert mock_joblib.dump.called
-
-    @patch("training.train.mlflow")
-    @patch("training.train.RandomForestClassifier")
-    @patch("training.train.joblib")
-    def test_train_logs_to_mlflow(self, mock_joblib, mock_rf, mock_mlflow, sample_config):
-        """Test that train logs to MLflow."""
-        from training.train import train
-
-        data = pd.DataFrame({
-            "feature1": [1.0, 2.0],
-            "feature2": [2.0, 4.0],
-            "target": [0, 1],
-        })
-
-        mock_model = MagicMock()
-        mock_rf.return_value = mock_model
-
-        with patch("training.train.Path") as mock_path:
-            mock_path_obj = MagicMock()
-            mock_path_obj.exists.return_value = True
-            mock_path_obj.mkdir = MagicMock()
-            mock_path.return_value = mock_path_obj
-
-            with patch("training.train.pd.read_csv", return_value=data):
-                train(sample_config)
-
-                # Verify MLflow was called
-                mock_mlflow.set_experiment.assert_called_with("test-experiment")
-                assert mock_mlflow.start_run.called
-
-    @patch("training.train.mlflow")
-    @patch("training.train.RandomForestClassifier")
-    @patch("training.train.joblib")
-    def test_train_handles_missing_target(self, mock_joblib, mock_rf, mock_mlflow, sample_config):
-        """Test training when target column is missing."""
-        from training.train import train
-
-        data = pd.DataFrame({
-            "feature1": [1.0, 2.0, 3.0],
-            "feature2": [2.0, 4.0, 6.0],
-            "other": [0, 1, 0],
-        })
-
-        mock_model = MagicMock()
-        mock_rf.return_value = mock_model
-
-        with patch("training.train.Path") as mock_path:
-            mock_path_obj = MagicMock()
-            mock_path_obj.exists.return_value = True
-            mock_path_obj.mkdir = MagicMock()
-            mock_path.return_value = mock_path_obj
-
-            with patch("training.train.pd.read_csv", return_value=data):
-                train(sample_config)
-
-                # Should still fit using last column as target
-                assert mock_model.fit.called
