@@ -1,6 +1,6 @@
-# MLOps Project Template
+# MLOps Project Accidents
 
-This repository provides a professional structure and a step-by-step methodology for industrializing Machine Learning projects.
+This repository provides a Machine Learning projects for Accidents project.
 
 ## 🏗 Project Architecture
 
