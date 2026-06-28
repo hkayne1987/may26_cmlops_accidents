@@ -62,6 +62,9 @@ metrics/
 # Environment
 .env
 
+#Model
+*.joblib
+
 
 # Phase 1 : données versionnées dans Git (DVC viendra en phase 2)
 !data/raw/
