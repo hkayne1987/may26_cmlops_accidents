@@ -85,23 +85,21 @@ Test the API Internally
 Start the API locally with:
 ```bash
 uv run uvicorn src.api.main:app --reload
-```
 
-Once started, the API will be available at:
-````bash
+## Once started, the API will be available at:
 API: http://localhost:8000
 Interactive documentation (Swagger UI): http://localhost:8000/docs
 ReDoc documentation: http://localhost:8000/redoc
 ```
 
 Endpoints:
-
+```bash
 GET /health
 Returns the health status of the API and verifies that the trained model has been successfully loaded into memory.
 
 POST /predict
 Performs inference using the trained XGBoost model.
-
+```
 Request Body
 The request must contain a list of feature values in the same order used during model training.
 Example Request
