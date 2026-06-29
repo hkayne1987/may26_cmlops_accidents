@@ -79,6 +79,49 @@ make tune           # run hyperparameter search (long)
 make tune-sample    # run hyperparameter search on a subsample (quick test)
 ```
 
+## API
+Run the API
+Test the API Internally
+Start the API locally with:
+```bash
+uv run uvicorn src.api.main:app --reload
+```
+
+Once started, the API will be available at:
+````bash
+API: http://localhost:8000
+Interactive documentation (Swagger UI): http://localhost:8000/docs
+ReDoc documentation: http://localhost:8000/redoc
+```
+
+Endpoints:
+
+GET /health
+Returns the health status of the API and verifies that the trained model has been successfully loaded into memory.
+
+POST /predict
+Performs inference using the trained XGBoost model.
+
+Request Body
+The request must contain a list of feature values in the same order used during model training.
+Example Request
+```bash
+{ 
+  "features": 
+    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ] 
+}
+```
+
+Example Response
+```bash
+{ 
+  "prediction": 0, 
+  "probabilities": [ 0.6708614230155945, 0.3291385769844055 ], 
+  "model_version": "1.0.0" 
+}
+```
+Important: The exact feature names and their ordering are defined in models/feature_columns.json. Ensure that the values in the features array correspond to that order.
+
 ## Project structure
 
 `src/data/`: Load, merge BAAC tables, build target, feature engineering and train/test split  
