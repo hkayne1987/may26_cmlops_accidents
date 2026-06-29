@@ -100,8 +100,9 @@ Returns the health status of the API and verifies that the trained model has bee
 POST /predict
 Performs inference using the trained XGBoost model.
 ```
-Request Body
+Request Body:
 The request must contain a list of feature values in the same order used during model training.
+
 Example Request
 ```bash
 { 
