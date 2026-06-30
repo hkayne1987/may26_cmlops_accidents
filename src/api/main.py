@@ -14,26 +14,19 @@ import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
-from prometheus_client import Counter, Gauge, generate_latest
 from pydantic import BaseModel, Field
 
-# Prometheus metrics
-INFERENCE_REQUESTS = Counter(
-    "inference_requests_total", "Total number of inference requests"
-)
-MODEL_LOAD_TIME = Gauge("model_load_seconds", "Time taken to load the model")
-PREDICTIONS_MADE = Counter("predictions_total", "Total predictions made")
-
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 model: Any = None
-model_path = Path(os.getenv("MODEL_PATH", "models/model.joblib"))
+model_path = PROJECT_ROOT / "models/xgb_gravite.joblib"
 
 
 def load_model() -> Any:
-    if not model_path.exists():
+    if not os.path.exists(model_path):
         return None
     start = time.time()
     loaded = joblib.load(model_path)
-    MODEL_LOAD_TIME.set(time.time() - start)
+    # MODEL_LOAD_TIME.set(time.time() - start)
     return loaded
 
 
@@ -83,7 +76,7 @@ async def predict(request: PredictRequest):
     """
     global model
 
-    INFERENCE_REQUESTS.inc()
+    # INFERENCE_REQUESTS.inc()
 
     if model is None:
         raise HTTPException(
@@ -102,7 +95,7 @@ async def predict(request: PredictRequest):
         if hasattr(model, "predict_proba"):
             probs = model.predict_proba(x)[0].tolist()
 
-        PREDICTIONS_MADE.inc()
+        # PREDICTIONS_MADE.inc()
 
         return PredictResponse(
             prediction=float(pred[0])
@@ -116,35 +109,35 @@ async def predict(request: PredictRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/predict/batch")
-async def predict_batch(features: str):
-    """
-    Batch prediction endpoint.
+# @app.get("/predict/batch")
+# async def predict_batch(features: str):
+#     """
+#     Batch prediction endpoint.
 
-    Query param: features as comma-separated values (e.g., "1.0,2.0,3.0")
-    """
-    global model
+#     Query param: features as comma-separated values (e.g., "1.0,2.0,3.0")
+#     """
+#     global model
 
-    if model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded.")
+#     if model is None:
+#         raise HTTPException(status_code=503, detail="Model not loaded.")
 
-    try:
-        # Parse comma-separated features
-        feature_list = [float(x) for x in features.split(",")]
-        x = np.array(feature_list).reshape(1, -1)
+#     try:
+#         # Parse comma-separated features
+#         feature_list = [float(x) for x in features.split(",")]
+#         x = np.array(feature_list).reshape(1, -1)
 
-        pred = model.predict(x)
+#         pred = model.predict(x)
 
-        return {"prediction": float(pred[0])}
+#         return {"prediction": float(pred[0])}
 
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+#     except Exception as e:
+#         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/metrics")
-async def metrics():
-    """Prometheus metrics endpoint."""
-    return Response(content=generate_latest(), media_type="text/plain")
+# @app.get("/metrics")
+# async def metrics():
+#     """Prometheus metrics endpoint."""
+#     return Response(content=generate_latest(), media_type="text/plain")
 
 
 if __name__ == "__main__":
