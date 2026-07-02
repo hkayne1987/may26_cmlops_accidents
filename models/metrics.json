@@ -2,9 +2,9 @@
   "main": {
     "threshold": 0.3,
     "auc_roc": 0.8759,
-    "recall_grave": 0.9029,
-    "precision_grave": 0.3706,
-    "f1_grave": 0.5255
+    "recall_severe": 0.9029,
+    "precision_severe": 0.3706,
+    "f1_severe": 0.5255
   },
   "threshold_search": [
     {
