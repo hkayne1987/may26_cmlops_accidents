@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 model: Any = None
-model_path = PROJECT_ROOT / "models/xgb_gravite.joblib"
+model_path = PROJECT_ROOT / "models/xgb_severity.joblib"
 
 
 def load_model() -> Any:

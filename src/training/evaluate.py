@@ -1,9 +1,9 @@
 """
-Évaluation du modèle de gravité des accidents.
-Charge le modèle entraîné (models/) et le jeu de test (data/processed/test.parquet),
-calcule les métriques et le compromis precision/recall selon le seuil.
+Evaluation of the accident severity model.
+Loads the trained model (models/) and the test set (data/processed/test.parquet).
+Computes metrics and the precision/recall trade-off by threshold.
 
-Exécution : python -m src.training.evaluate
+Run: python -m src.training.evaluate
 """
 
 import json
@@ -23,56 +23,56 @@ log = logging.getLogger(__name__)
 TEST_PATH = Path("data/processed/test.parquet")
 MODEL_PATH = Path("models/xgb_gravite.joblib")
 METRICS_PATH = Path("models/metrics.json")
-DECISION_THRESHOLD = 0.30   # seuil retenu (favorise le recall sur la classe grave)
+DECISION_THRESHOLD = 0.30   # retained threshold (favors recall on the severe class)
 
 
 def load_test() -> pd.DataFrame:
     if not TEST_PATH.exists():
-        raise FileNotFoundError(f"Jeu de test introuvable : {TEST_PATH}. "
-                                f"Lance d'abord `python -m src.data.preprocess`.")
+        raise FileNotFoundError(f"Test set not found: {TEST_PATH}. "
+                                f"Run `python -m src.data.preprocess` first.")
     df = pd.read_parquet(TEST_PATH)
-    log.info(f"Test chargé : {df.shape[0]} lignes")
+    log.info(f"Test set loaded: {df.shape[0]} rows")
     return df
 
 
 def load_model():
     if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Modèle introuvable : {MODEL_PATH}. "
-                                f"Lance d'abord `python -m src.training.train`.")
+        raise FileNotFoundError(f"Model not found: {MODEL_PATH}. "
+                                f"Run `python -m src.training.train` first.")
     return joblib.load(MODEL_PATH)
 
 
 def evaluate(model, X_test, y_test, threshold: float = DECISION_THRESHOLD) -> dict:
-    """Évalue le modèle au seuil donné + AUC (indépendant du seuil)."""
+    """Evaluates the model at the given threshold + AUC (threshold-independent)."""
     y_proba = model.predict_proba(X_test)[:, 1]
     y_pred = (y_proba >= threshold).astype(int)
 
     auc = roc_auc_score(y_test, y_proba)
-    log.info(f"\n=== Rapport (seuil = {threshold}) ===\n"
-             + classification_report(y_test, y_pred, target_names=["non grave", "grave"]))
-    log.info(f"Matrice de confusion :\n{confusion_matrix(y_test, y_pred)}")
-    log.info(f"AUC-ROC : {auc:.3f}")
+    log.info(f"\n=== Report (threshold = {threshold}) ===\n"
+             + classification_report(y_test, y_pred, target_names=["non severe", "severe"]))
+    log.info(f"Confusion matrix:\n{confusion_matrix(y_test, y_pred)}")
+    log.info(f"AUC-ROC: {auc:.3f}")
 
     return {
         "threshold": threshold,
         "auc_roc": round(auc, 4),
-        "recall_grave": round(recall_score(y_test, y_pred), 4),
-        "precision_grave": round(precision_score(y_test, y_pred), 4),
-        "f1_grave": round(f1_score(y_test, y_pred), 4),
+        "recall_severe": round(recall_score(y_test, y_pred), 4),
+        "precision_severe": round(precision_score(y_test, y_pred), 4),
+        "f1_severe": round(f1_score(y_test, y_pred), 4),
     }
 
 
 def threshold_search(model, X_test, y_test):
-    """Balaye plusieurs seuils pour trouver le compromis precision/recall."""
+    """Scans several thresholds to find the precision/recall trade-off."""
     y_proba = model.predict_proba(X_test)[:, 1]
-    log.info("\n=== Balayage de seuils ===")
+    log.info("\n=== Threshold scan ===")
     rows = []
     for t in [0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7]:
         y_pred = (y_proba >= t).astype(int)
         r = recall_score(y_test, y_pred)
         p = precision_score(y_test, y_pred)
         f = f1_score(y_test, y_pred)
-        log.info(f"seuil={t:.2f} | recall={r:.3f} | precision={p:.3f} | f1={f:.3f}")
+        log.info(f"threshold={t:.2f} | recall={r:.3f} | precision={p:.3f} | f1={f:.3f}")
         rows.append({"threshold": t, "recall": round(r, 4),
                      "precision": round(p, 4), "f1": round(f, 4)})
     return rows
@@ -86,8 +86,8 @@ if __name__ == "__main__":
     metrics = evaluate(model, X_test, y_test)
     threshold = threshold_search(model, X_test, y_test)
 
-    # Sauvegarde des métriques
+    # Save metrics
     METRICS_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(METRICS_PATH, "w") as f:
         json.dump({"main": metrics, "threshold_search": threshold}, f, indent=2)
-    log.info(f"\nMétriques sauvegardées : {METRICS_PATH}")
+    log.info(f"\nMetrics saved: {METRICS_PATH}")
