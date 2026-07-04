@@ -87,20 +87,19 @@ async def predict(request: PredictRequest):
         # Reshape for single prediction
         x = np.array(request.features).reshape(1, -1)
 
-        # Get prediction
-        pred = model.predict(x)
+        DECISION_THRESHOLD = 0.30
 
-        # Get probabilities if available
+        # Get probabilities and apply our custom decision threshold
         probs = None
         if hasattr(model, "predict_proba"):
             probs = model.predict_proba(x)[0].tolist()
+            pred = int(probs[1] >= DECISION_THRESHOLD)
+        else:
+            pred = model.predict(x)[0]
 
         # PREDICTIONS_MADE.inc()
-
         return PredictResponse(
-            prediction=float(pred[0])
-            if hasattr(pred[0], "__float__")
-            else int(pred[0]),
+            prediction=pred,
             probabilities=probs,
             model_version="1.0.0",
         )
