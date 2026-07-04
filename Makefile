@@ -1,4 +1,4 @@
-.PHONY: install test lint format clean help preprocess train train-sample tune tune-sample evaluate
+.PHONY: install test lint format clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate
 
 help:
 	@echo "Cibles disponibles :"
@@ -55,3 +55,6 @@ tune-sample:
 
 evaluate:
 	python -m src.training.evaluate
+
+preprocess-train-evaluate:
+	python -m src.data.preprocess && python -m src.training.train && python -m src.training.evaluate
