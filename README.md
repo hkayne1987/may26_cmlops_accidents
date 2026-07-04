@@ -105,18 +105,17 @@ The request must contain a list of feature values in the same order used during 
 
 Example Request
 ```bash
-{ 
-  "features": 
-    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ] 
+{
+  "features": [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 }
 ```
 
 Example Response
 ```bash
-{ 
-  "prediction": 0, 
-  "probabilities": [ 0.6708614230155945, 0.3291385769844055 ], 
-  "model_version": "1.0.0" 
+{
+  "prediction": 0,
+  "probabilities": [0.9524529576301575, 0.04754702001810074],
+  "model_version": "1.0.0"
 }
 ```
 Important: The exact feature names and their ordering are defined in models/feature_columns.json. Ensure that the values in the features array correspond to that order.
@@ -124,10 +123,10 @@ Important: The exact feature names and their ordering are defined in models/feat
 ## Project structure
 
 `src/data/`: Load, merge BAAC tables, build target, feature engineering and train/test split  
-`src/train/`: Train, save model + feature schema, metrics calculation and threshold search
-`data/`: Raw BAAC CSVs (downloaded manually), train.parquet / test.parquet
-`models/`: Trained model + metrics
-`docs/`: PDF explaining features
+`src/train/`: Train, save model + feature schema, metrics calculation and threshold search  
+`data/`: Raw BAAC CSVs (downloaded manually), train.parquet / test.parquet  
+`models/`: Trained model + metrics  
+`docs/`: PDF explaining features  
 
 ## Methodology notes
 
