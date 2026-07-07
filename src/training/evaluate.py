@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 # --- Configuration ------------------------------------------------------------
 TEST_PATH = Path("data/processed/test.parquet")
-MODEL_PATH = Path("models/xgb_gravite.joblib")
+MODEL_PATH = Path("models/xgb_severity.joblib")
 METRICS_PATH = Path("models/metrics.json")
 DECISION_THRESHOLD = 0.30   # retained threshold (favors recall on the severe class)
 

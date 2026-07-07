@@ -25,7 +25,8 @@ NUMERIC_FEATURES = ["age", "heure", "minute", "jour", "mois", "an",
 
 # Columns to exclude from features (target, identifiers, free text, redundancies)
 DROP_COLS = ["grav", "grave", "Num_Acc", "id_usager", "id_vehicule", "num_veh",
-             "an_nais", "adr", "voie", "hrmn"]
+            "an_nais", "adr", "voie", "hrmn","lartpc", "larrout", "v1", "v2",
+            "pr", "pr1","motor", "trajet"]
 
 # Column name harmonization across years (BAAC schema drift)
 # 2022 names the accident identifier "Accident_Id" instead of "Num_Acc".
@@ -113,17 +114,11 @@ def build_target(df: pd.DataFrame):
 
 
 def engineer_features(df: pd.DataFrame):
-    """Creates age and date/time features, then applies the column types
+    """Creates date/time features, then applies the column types
     (numeric vs categorical) expected by XGBoost.
     """
 
     df = df.copy()
-
-    # Age at the time of the accident
-    df["an_nais"] = pd.to_numeric(df["an_nais"], errors="coerce")
-    df["age"] = pd.to_numeric(df["an"], errors="coerce") - df["an_nais"]
-    # Set outlier ages to NaN
-    df.loc[(df["age"] < 0) | (df["age"] > 120), "age"] = pd.NA
 
     # Time components from hrmn ("HH:MM")
     df["heure"] = df["hrmn"].str.split(":").str[0]
