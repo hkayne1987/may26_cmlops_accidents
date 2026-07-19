@@ -134,6 +134,9 @@ def log_mlflow_run(model, X_train) -> str:
     # opt back in since the local fallback (file:./mlruns) relies on it.
     os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"))
+    # Explicitly create/select the experiment: a brand-new tracking store
+    # (fresh container, fresh machine) has no default experiment "0" yet.
+    mlflow.set_experiment("severity-prediction")
 
     with mlflow.start_run() as run:
         mlflow.log_params(HYPERPARAMS)
