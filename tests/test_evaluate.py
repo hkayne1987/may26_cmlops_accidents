@@ -71,9 +71,9 @@ def test_evaluate_metrics_for_threshold():
 
     assert metrics["threshold"] == 0.5
     assert metrics["auc_roc"] >= 0.0
-    assert metrics["precision_grave"] >= 0.0
-    assert metrics["recall_grave"] >= 0.0
-    assert metrics["f1_grave"] >= 0.0
+    assert metrics["precision_severe"] >= 0.0
+    assert metrics["recall_severe"] >= 0.0
+    assert metrics["f1_severe"] >= 0.0
 
 
 def test_threshold_search_returns_reliable_rows():

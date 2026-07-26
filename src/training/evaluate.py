@@ -6,11 +6,12 @@ Computes metrics and the precision/recall trade-off by threshold.
 Run: python -m src.training.evaluate
 """
 
-import json
 import logging
+import os
 from pathlib import Path
 
 import joblib
+import mlflow
 import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, precision_score, recall_score, f1_score
 
@@ -22,7 +23,7 @@ log = logging.getLogger(__name__)
 # --- Configuration ------------------------------------------------------------
 TEST_PATH = Path("data/processed/test.parquet")
 MODEL_PATH = Path("models/xgb_severity.joblib")
-METRICS_PATH = Path("models/metrics.json")
+RUN_ID_PATH = Path("models/run_id.txt")  # written by train.py
 DECISION_THRESHOLD = 0.30   # retained threshold (favors recall on the severe class)
 
 
@@ -86,8 +87,20 @@ if __name__ == "__main__":
     metrics = evaluate(model, X_test, y_test)
     threshold = threshold_search(model, X_test, y_test)
 
-    # Save metrics
-    METRICS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(METRICS_PATH, "w") as f:
-        json.dump({"main": metrics, "threshold_search": threshold}, f, indent=2)
-    log.info(f"\nMetrics saved: {METRICS_PATH}")
+    # Log metrics into the MLflow run created by train.py, if available
+    if RUN_ID_PATH.exists():
+        os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
+        mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"))
+        run_id = RUN_ID_PATH.read_text().strip()
+        with mlflow.start_run(run_id=run_id):
+            mlflow.log_metric("auc_roc", metrics["auc_roc"])
+            mlflow.log_metric("recall", metrics["recall_severe"])
+            mlflow.log_metric("precision", metrics["precision_severe"])
+            mlflow.log_table(
+                data=pd.DataFrame(threshold),
+                artifact_file="threshold_scan.json",
+            )
+        log.info(f"Metrics and threshold scan logged to MLflow run {run_id}")
+    else:
+        log.warning(f"{RUN_ID_PATH} not found: skipping MLflow logging "
+                    f"(run `python -m src.training.train` first)")

@@ -64,6 +64,8 @@ metrics/
 
 #Model
 *.joblib
+models/run_id.txt
+models/metrics.json
 
 
 # Phase 1 : données versionnées dans Git (DVC viendra en phase 2)

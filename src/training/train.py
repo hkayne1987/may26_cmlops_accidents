@@ -7,6 +7,7 @@ Run via 'python -m src.training.train'.
 """
 
 import logging
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -16,6 +17,8 @@ from src.data.preprocess import build_feature_matrix
 from sklearn.model_selection import GroupShuffleSplit
 from xgboost import XGBClassifier
 import joblib
+import mlflow
+import mlflow.xgboost
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -24,6 +27,12 @@ TRAIN_PATH = Path("data/processed/train.parquet")
 MODEL_DIR = Path("models")
 TEST_SIZE = 0.2
 RANDOM_STATE = 0
+DECISION_THRESHOLD = 0.30  # decision threshold for the severe class
+
+REGISTERED_MODEL_NAME = "xgb_severity"
+PRODUCTION_ALIAS = "production"
+MODEL_FILENAME = f"{REGISTERED_MODEL_NAME}.joblib"
+RUN_ID_PATH = MODEL_DIR / "run_id.txt"  # read by evaluate.py to resume this run
 
 # Hyperparameters retained after a GridSearchCV (scoring="f1", 3-fold StratifiedGroupKFold) run on year 2023 only (~125k users).
 # Tested grid: max_depth=[3, 5, 7], learning_rate=[0.05, 0.1, 0.2], n_estimators=[50, 100, 200, 300].
@@ -96,7 +105,7 @@ def tune_hyperparameters(X_train, y_train, groups_train):
 def save_model(model, X_train):
     """Saves the model + the ordered list of columns expected at inference."""
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    model_path = MODEL_DIR / "xgb_severity.joblib"
+    model_path = MODEL_DIR / MODEL_FILENAME
     joblib.dump(model, model_path)
     log.info(f"Model saved: {model_path}")
 
@@ -105,6 +114,57 @@ def save_model(model, X_train):
     schema_path = MODEL_DIR / "feature_columns.json"
     pd.Series(X_train.columns).to_json(schema_path, orient="values")
     log.info(f"Feature schema saved: {schema_path}")
+
+
+def get_data_version() -> str:
+    """Returns the DVC data version for lineage tracking.
+
+    Placeholder until the DVC pipeline is in place (tracked separately by the team).
+    """
+    return os.environ.get("DATA_VERSION", "pending-dvc")
+
+
+def log_mlflow_run(model, X_train) -> str:
+    """Logs the training run to MLflow: hyperparameters, data lineage, and the
+    model registered under REGISTERED_MODEL_NAME with a 'production' alias + tag.
+
+    Returns the MLflow run_id so evaluate.py can resume this same run to log metrics.
+    """
+    # MLflow >=3 puts the filesystem backend in maintenance mode by default;
+    # opt back in since the local fallback (file:./mlruns) relies on it.
+    os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
+    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns"))
+    # Explicitly create/select the experiment: a brand-new tracking store
+    # (fresh container, fresh machine) has no default experiment "0" yet.
+    mlflow.set_experiment("severity-prediction")
+
+    with mlflow.start_run() as run:
+        mlflow.log_params(HYPERPARAMS)
+        mlflow.log_param("decision_threshold", DECISION_THRESHOLD)
+        mlflow.log_param("data_version", get_data_version())
+
+        model_info = mlflow.xgboost.log_model(
+            model,
+            name="model",
+            registered_model_name=REGISTERED_MODEL_NAME,
+        )
+
+        client = mlflow.MlflowClient()
+        version = model_info.registered_model_version
+        client.set_registered_model_alias(
+            name=REGISTERED_MODEL_NAME, alias=PRODUCTION_ALIAS, version=version,
+        )
+        client.set_model_version_tag(
+            name=REGISTERED_MODEL_NAME, version=version, key="stage", value="production",
+        )
+        client.set_model_version_tag(
+            name=REGISTERED_MODEL_NAME, version=version,
+            key="decision_threshold", value=str(DECISION_THRESHOLD),
+        )
+
+        log.info(f"MLflow run {run.info.run_id}: registered {REGISTERED_MODEL_NAME} "
+                 f"v{version} (alias={PRODUCTION_ALIAS})")
+        return run.info.run_id
 
 
 if __name__ == "__main__":
@@ -125,4 +185,10 @@ if __name__ == "__main__":
     else:
         model = train_model(X, y)
         save_model(model, X)
+
+        run_id = log_mlflow_run(model, X)
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        RUN_ID_PATH.write_text(run_id)
+        log.info(f"MLflow run_id saved: {RUN_ID_PATH} (used by evaluate.py)")
+
         log.info("Training complete.")
