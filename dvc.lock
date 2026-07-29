@@ -39,3 +39,19 @@ stages:
       hash: md5
       md5: 8e06ae224e28cd2367e4bfd0b15edfc9
       size: 873149183
+  evaluate:
+    cmd: python -m src.training.evaluate
+    deps:
+    - path: data/processed
+      hash: md5
+      md5: 2aa378746bb5cf94c38912f81f00f745.dir
+      size: 40237009
+      nfiles: 2
+    - path: models/xgb_severity.joblib
+      hash: md5
+      md5: 8e06ae224e28cd2367e4bfd0b15edfc9
+      size: 873149183
+    - path: src/training/evaluate.py
+      hash: md5
+      md5: 666ce61be02c14f72de1bfc2c28b1867
+      size: 4202

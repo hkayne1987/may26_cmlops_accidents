@@ -15,3 +15,9 @@ stages:
     - models/xgb_severity.joblib
     metrics:
     - models/feature_columns.json
+  evaluate:
+    cmd: python -m src.training.evaluate
+    deps:
+    - data/processed
+    - models/xgb_severity.joblib
+    - src/training/evaluate.py
