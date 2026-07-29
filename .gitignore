@@ -73,4 +73,3 @@ models/metrics.json
 !data/raw/*.csv
 !docs/description*.pdf
 !data/processed
-/models
