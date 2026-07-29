@@ -18,3 +18,24 @@ stages:
       md5: 2aa378746bb5cf94c38912f81f00f745.dir
       size: 40237009
       nfiles: 2
+  train:
+    cmd: python -m src.training.train
+    deps:
+    - path: data/processed
+      hash: md5
+      md5: 2aa378746bb5cf94c38912f81f00f745.dir
+      size: 40237009
+      nfiles: 2
+    - path: src/training/train.py
+      hash: md5
+      md5: 0de870b30f3b95fc5f924de9b6d51adc
+      size: 6869
+    outs:
+    - path: models/feature_columns.json
+      hash: md5
+      md5: 05278841f2b7575089415e6a7140735d
+      size: 279
+    - path: models/xgb_severity.joblib
+      hash: md5
+      md5: 8e06ae224e28cd2367e4bfd0b15edfc9
+      size: 873149183

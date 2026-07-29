@@ -6,3 +6,12 @@ stages:
     - src/data/preprocess.py
     outs:
     - data/processed
+  train:
+    cmd: python -m src.training.train
+    deps:
+    - data/processed
+    - src/training/train.py
+    outs:
+    - models/xgb_severity.joblib
+    metrics:
+    - models/feature_columns.json
