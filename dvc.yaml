@@ -9,7 +9,7 @@ stages:
   train:
     cmd: python -m src.training.train
     deps:
-    - data/processed
+    - data/processed/train.parquet
     - src/training/train.py
     outs:
     - models/xgb_severity.joblib
@@ -18,6 +18,6 @@ stages:
   evaluate:
     cmd: python -m src.training.evaluate
     deps:
-    - data/processed
+    - data/processed/test.parquet
     - models/xgb_severity.joblib
     - src/training/evaluate.py
