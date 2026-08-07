@@ -179,7 +179,17 @@ Example Response
 `model_version` is the MLflow registry version currently served, or `"local"`
 when the API fell back to the on-disk model.
 
-Important: The exact feature names and their ordering are defined in models/feature_columns.json. Ensure that the values in the features array correspond to that order.
+Important: `features` must list the 40 values in the exact order the model
+expects. The authoritative order is the one carried by the served model itself
+(`model.get_booster().feature_names`); `models/feature_columns.json` records the
+same order and is the easiest way to read it:
+
+```bash
+uv run python -c "import json; print(json.load(open('models/feature_columns.json')))"
+```
+
+Both come from the same training run, so they match — but if you ever retrain
+without committing the updated schema, trust the served model over the file.
 
 ## Project structure
 
