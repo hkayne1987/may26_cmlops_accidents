@@ -1,13 +1,14 @@
-.PHONY: install test lint format clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate
+.PHONY: install test lint format clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate mlflow-ui-local
 
 help:
-	@echo "Cibles disponibles :"
-	@echo "  make preprocess    - prépare les données (train/test)"
-	@echo "  make train         - entraîne le modèle"
-	@echo "  make train-sample  - entraîne sur un échantillon (test rapide)"
-	@echo "  make tune          - recherche d'hyperparamètres (long)"
-	@echo "  make tune-sample   - recherche d'hyperparamètres sur échantillon (test rapide)"
-	@echo "  make evaluate      - évalue le modèle sur le test"
+	@echo "Available targets:"
+	@echo "  make preprocess        - prepare the data (train/test)"
+	@echo "  make train             - train the model"
+	@echo "  make train-sample      - train on a subsample (quick test)"
+	@echo "  make tune              - hyperparameter search (long)"
+	@echo "  make tune-sample       - hyperparameter search on a subsample (quick test)"
+	@echo "  make evaluate          - evaluate the model on the test set"
+	@echo "  make mlflow-ui-local   - open the local MLflow UI (./mlruns); remote tracking runs on DagsHub"
 
 install:
 	uv sync
@@ -32,8 +33,11 @@ clean:
 	find . -type f -name "*.pyc" -delete
 	rm -rf .pytest_cache .mypy_cache
 
-mlflow:
-	mlflow ui
+# Experiment tracking runs on DagsHub, which serves its own UI -- there is no
+# local server to start. This target only opens a local UI on ./mlruns, which
+# is useful when training offline with the file:./mlruns fallback.
+mlflow-ui-local:
+	mlflow ui --backend-store-uri file:./mlruns
 
 requirements:
 	uv export -o requirements.txt
