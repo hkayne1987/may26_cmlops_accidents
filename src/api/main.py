@@ -71,15 +71,25 @@ def load_model_from_disk() -> tuple[Any, str]:
     return loaded, "local"
 
 
-def load_model() -> tuple[Any, str]:
-    """Pulls from the MLflow registry, falling back to the local file."""
-    try:
-        loaded, version = load_model_from_registry()
-        if loaded is not None:
-            return loaded, version
-    except Exception as e:
-        log.warning(f"Registry pull failed ({type(e).__name__}: {e}); "
-                    f"falling back to local file")
+def load_model(attempts: int = 3, backoff: float = 5.0) -> tuple[Any, str]:
+    """Pulls from the MLflow registry, falling back to the local file.
+
+    Retries a few times: pulling artifacts from DagsHub occasionally times
+    out, and a transient failure should not leave the API without a model.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            loaded, version = load_model_from_registry()
+            if loaded is not None:
+                return loaded, version
+            break  # tracking URI unset: no point retrying
+        except Exception as e:
+            log.warning(f"Registry pull failed (attempt {attempt}/{attempts}, "
+                        f"{type(e).__name__}: {e})")
+            if attempt < attempts:
+                time.sleep(backoff)
+
+    log.info("Falling back to local model file")
     return load_model_from_disk()
 
 
