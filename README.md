@@ -39,24 +39,39 @@ uv sync
 
 ## Data
 
-The BAAC data is **not** versioned in this repo and must be downloaded manually
-from [data.gouv.fr](https://www.data.gouv.fr/datasets/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/).
+The BAAC data is versioned with DVC on DagsHub, not stored in Git. Git only
+carries the hashes (`data/raw.dvc`, `dvc.lock`); the files themselves are
+pulled on demand:
 
-For each year **2019 to 2024**, download the 4 CSV files and place them in
-`data/raw/` using the naming scheme `type-year.csv`:
+```bash
+docker-compose --profile dvc run --rm dvc pull
+```
 
-data/raw/  
-├── caracteristiques-2019.csv  
-├── lieux-2019.csv  
-├── vehicules-2019.csv  
-├── usagers-2019.csv  
-└── ... (through 2024 — 24 files total)
+Run this once after cloning, and again after any `git pull` that changes
+`dvc.lock` or a `.dvc` file. It is never automatic — `dvc status` tells you
+whether you are out of date:
 
-The variable description PDF is in `docs/`.
+```bash
+docker-compose --profile dvc run --rm dvc status
+```
+
+This populates `data/raw/` with the 4 tables per year for **2019 to 2024**
+(`caracteristiques`, `lieux`, `vehicules`, `usagers` — 24 files) and
+`data/processed/` with `train.parquet` / `test.parquet`.
+
+After regenerating the data, push it back to the remote:
+
+```bash
+docker-compose --profile dvc run --rm dvc push
+```
+
+The original source is
+[data.gouv.fr](https://www.data.gouv.fr/datasets/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/);
+the variable description PDF is in `docs/`.
 
 ## Pipeline
 
-The pipeline runs in three steps:
+The pipeline runs in three steps (pull the data first, see [Data](#data)):
 
 ```bash
 make preprocess   # load, merge and clean the 4 tables -> data/processed/{train,test}.parquet
@@ -122,7 +137,8 @@ curl http://localhost:8000/health
 # {"status":"healthy","model_loaded":true,"model_version":"2"}
 ```
 
-Training runs on demand rather than as part of the default stack:
+Training runs on demand rather than as part of the default stack. The image
+carries no data: `data/` is bind-mounted, so pull it first (see [Data](#data)).
 
 ```bash
 docker-compose --profile training run --rm training \
@@ -196,7 +212,7 @@ without committing the updated schema, trust the served model over the file.
 `src/data/`: Load, merge BAAC tables, build target, feature engineering and train/test split  
 `src/training/`: Train, save model + feature schema, metrics calculation and threshold search  
 `src/api/`: FastAPI inference service  
-`data/`: Raw BAAC CSVs (downloaded manually), train.parquet / test.parquet  
+`data/`: Raw BAAC CSVs and train.parquet / test.parquet (versioned with DVC, not in Git)  
 `models/`: Trained model + feature schema (metrics are logged to MLflow)  
 `docker/`: Dockerfiles for the API and training images  
 `docs/`: PDF explaining features  
