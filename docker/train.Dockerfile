@@ -19,8 +19,9 @@ RUN uv sync --no-dev --frozen
 # Copy source after dependency install (changes more often)
 COPY src/ ./src/
 
-# Copy preprocessed data (can be mounted instead in production)
-COPY data/processed/ ./data/processed/
+# Data is not copied into the image: it is versioned with DVC and bind-mounted
+# at run time (see the training service in docker-compose.yml). Run `dvc pull`
+# on the host first so data/processed/ is populated.
 
 # Set PYTHONPATH
 ENV PYTHONPATH=/app

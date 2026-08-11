@@ -1,0 +1,42 @@
+schema: '2.0'
+stages:
+  preprocess:
+    cmd: python -m src.data.preprocess
+    deps:
+    - path: data/raw
+      hash: md5
+      md5: 8cbc02023086239ce111fbc02b391815.dir
+      size: 189035867
+      nfiles: 25
+    - path: src/data/preprocess.py
+      hash: md5
+      md5: 1b74bc39dddec3c6ac3644e22b3f6455
+      size: 7818
+    outs:
+    - path: data/processed
+      hash: md5
+      md5: 2aa378746bb5cf94c38912f81f00f745.dir
+      size: 40237009
+      nfiles: 2
+  train:
+    cmd: python -m src.training.train
+    deps:
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: 50b9f18c93c16ae5588118ac65e313da
+      size: 29656724
+    - path: src/training/train.py
+      hash: md5
+      md5: 0de870b30f3b95fc5f924de9b6d51adc
+      size: 6869
+  evaluate:
+    cmd: python -m src.training.evaluate
+    deps:
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: d66c3b87c5e1f36ab3c547e337ec5e48
+      size: 10580285
+    - path: src/training/evaluate.py
+      hash: md5
+      md5: 666ce61be02c14f72de1bfc2c28b1867
+      size: 4202

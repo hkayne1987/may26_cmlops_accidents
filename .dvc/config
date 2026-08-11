@@ -1,0 +1,4 @@
+[core]
+    remote = origin
+['remote "origin"']
+    url = https://dagshub.com/hkayne1987/may26_cmlops_accidents.dvc

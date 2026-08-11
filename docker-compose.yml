@@ -27,7 +27,8 @@ services:
       retries: 3
 
   # Training: run on demand, not part of the default stack.
-  # Usage: docker-compose run --rm training
+  # Usage: docker-compose --profile training run --rm training
+  # Requires data/processed/, so run the dvc service below first.
   training:
     build:
       context: .
@@ -39,6 +40,24 @@ services:
       - ./models:/app/models
     profiles:
       - training
+
+  # DVC data versioning against the DagsHub remote. A one-shot command, not
+  # a long-running service.
+  # Usage: docker-compose --profile dvc run --rm dvc pull
+  #        docker-compose --profile dvc run --rm dvc push
+  #        docker-compose --profile dvc run --rm dvc status
+  dvc:
+    build:
+      context: .
+      dockerfile: docker/dvc.Dockerfile
+    env_file:
+      - .env
+    volumes:
+      # The whole repo: DVC needs .dvc/, dvc.yaml and dvc.lock, and writes
+      # pulled data back to the host.
+      - .:/app
+    profiles:
+      - dvc
 
   # Prometheus monitoring (Phase 4)
   prometheus:
