@@ -1,6 +1,6 @@
 stages:
   preprocess:
-    cmd: python src/data/preprocess.py
+    cmd: python -m src.data.preprocess
     deps:
     - data/raw
     - src/data/preprocess.py
@@ -13,7 +13,7 @@ stages:
     - src/training/train.py
     outs:
     - models/xgb_severity.joblib
-    metrics:
+    # Column schema, not a metric: it is an output of training like the model.
     - models/feature_columns.json
   evaluate:
     cmd: python -m src.training.evaluate

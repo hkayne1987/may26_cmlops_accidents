@@ -1,7 +1,7 @@
 schema: '2.0'
 stages:
   preprocess:
-    cmd: python src/data/preprocess.py
+    cmd: python -m src.data.preprocess
     deps:
     - path: data/raw
       hash: md5
