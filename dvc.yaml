@@ -6,18 +6,16 @@ stages:
     - src/data/preprocess.py
     outs:
     - data/processed
+  # The trained model is versioned in the MLflow registry on DagsHub, not in
+  # DVC: train.py registers it as xgb_severity and moves the production alias.
+  # DVC only versions the data here.
   train:
     cmd: python -m src.training.train
     deps:
     - data/processed/train.parquet
     - src/training/train.py
-    outs:
-    - models/xgb_severity.joblib
-    # Column schema, not a metric: it is an output of training like the model.
-    - models/feature_columns.json
   evaluate:
     cmd: python -m src.training.evaluate
     deps:
     - data/processed/test.parquet
-    - models/xgb_severity.joblib
     - src/training/evaluate.py

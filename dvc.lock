@@ -29,15 +29,6 @@ stages:
       hash: md5
       md5: 0de870b30f3b95fc5f924de9b6d51adc
       size: 6869
-    outs:
-    - path: models/feature_columns.json
-      hash: md5
-      md5: 05278841f2b7575089415e6a7140735d
-      size: 279
-    - path: models/xgb_severity.joblib
-      hash: md5
-      md5: 8e06ae224e28cd2367e4bfd0b15edfc9
-      size: 873149183
   evaluate:
     cmd: python -m src.training.evaluate
     deps:
@@ -45,10 +36,6 @@ stages:
       hash: md5
       md5: d66c3b87c5e1f36ab3c547e337ec5e48
       size: 10580285
-    - path: models/xgb_severity.joblib
-      hash: md5
-      md5: 8e06ae224e28cd2367e4bfd0b15edfc9
-      size: 873149183
     - path: src/training/evaluate.py
       hash: md5
       md5: 666ce61be02c14f72de1bfc2c28b1867
