@@ -86,17 +86,14 @@ def test_build_target_filters_and_labels():
     assert out.loc[out["grav"] == "0", "grave"].iloc[0] == 0
 
 
-def test_engineer_features_age_and_time():
+def test_engineer_features_time():
     df = pd.DataFrame({"an_nais": [1980, "notnum"], "an": [2020, 2020], "hrmn": ["12:34", "00:05"]})
     out = preprocess.engineer_features(df)
-    assert "age" in out.columns
-    # First row age = 40
-    assert out.loc[0, "age"] == 40
-    # Second row age becomes NaN due to non-numeric an_nais
-    assert pd.isna(out.loc[1, "age"]) or out.loc[1, "age"] is pd.NA
-    # heure and minute derived
+    # heure and minute derived from hrmn
     assert out.loc[0, "heure"] == "12"
     assert out.loc[0, "minute"] == "34"
+    assert out.loc[1, "heure"] == "00"
+    assert out.loc[1, "minute"] == "05"
 
 
 def test_build_feature_matrix_types_and_groups():

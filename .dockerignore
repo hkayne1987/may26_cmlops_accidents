@@ -1,0 +1,52 @@
+# Build context exclusions.
+# The Dockerfiles only need pyproject.toml, uv.lock, src/, models/ and
+# data/processed/ — everything else here would just slow the build down.
+
+# Secrets: never send credentials into the build context
+.env
+
+# Version control and local virtualenv (the image runs uv sync itself)
+.git/
+.gitignore
+.venv/
+
+# Raw BAAC data (~200 MB): only data/processed/ is copied into images
+data/raw/
+data/features/
+
+# MLflow local backend and artifacts (tracking runs on DagsHub)
+mlruns/
+artifacts/
+mlartifacts/
+
+# Monitoring volumes created by docker-compose
+prometheus_data/
+grafana_data/
+minio_data/
+
+# Python caches and test/lint artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Docs, slides and exploration notebooks
+docs/
+slides/
+notebooks/
+reports/
+
+# Editor and OS noise
+.claude/
+.cursorignore
+.vscode/
+.idea/
+.DS_Store
+
+# Note: DVC files (.dvc/, *.dvc, dvc.yaml, dvc.lock) are deliberately NOT
+# excluded — they will be needed in the build context once the DVC pipeline
+# is in place.
