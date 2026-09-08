@@ -67,9 +67,9 @@ metrics/
 models/run_id.txt
 models/metrics.json
 
+# API user accounts: contains password hashes, never commit
+data/api_users.db
 
-# Phase 1 : données versionnées dans Git (DVC viendra en phase 2)
-!data/raw/
-!data/raw/*.csv
+
+# Keep the variable description PDF despite the *.pdf rule above
 !docs/description*.pdf
-!data/processed

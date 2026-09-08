@@ -1,8 +1,8 @@
 # Docker Compose - Local Orchestration
 #
 # MLflow tracking and the model registry are hosted on DagsHub, not run
-# locally. Copy .env.example to .env and fill in your own DagsHub
-# credentials before starting (see README).
+# locally. Copy env.example to .env and fill in your own DagsHub
+# credentials and a JWT signing key before starting (see README).
 
 services:
   # Inference API: pulls models:/xgb_severity@production from DagsHub at startup
@@ -17,6 +17,9 @@ services:
     volumes:
       # Fallback model used only when the registry is unreachable
       - ./models:/app/models
+      # User accounts must survive container recreation, so the SQLite file
+      # lives on the host. It holds password hashes and is gitignored.
+      - ./data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       # start_period covers the model pull from DagsHub (~10s, plus retries
