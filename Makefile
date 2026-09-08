@@ -1,4 +1,4 @@
-.PHONY: install test lint format clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate mlflow-ui-local
+.PHONY: install test lint format clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate mlflow-ui-local users
 
 help:
 	@echo "Available targets:"
@@ -9,6 +9,7 @@ help:
 	@echo "  make tune-sample       - hyperparameter search on a subsample (quick test)"
 	@echo "  make evaluate          - evaluate the model on the test set"
 	@echo "  make mlflow-ui-local   - open the local MLflow UI (./mlruns); remote tracking runs on DagsHub"
+	@echo "  make users ARGS=...    - manage API accounts, e.g. ARGS=\"create alice --role admin\""
 
 install:
 	uv sync
@@ -17,16 +18,16 @@ install-dev:
 	uv sync
 
 test:
-	pytest tests/ -v
+	uv run pytest tests/ -v
 
 lint:
-	ruff check src/
+	uv run ruff check src/
 
 format:
-	ruff format src/ tests/
+	uv run ruff format src/ tests/
 
 typecheck:
-	mypy src/
+	uv run mypy src/
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
@@ -37,28 +38,35 @@ clean:
 # local server to start. This target only opens a local UI on ./mlruns, which
 # is useful when training offline with the file:./mlruns fallback.
 mlflow-ui-local:
-	mlflow ui --backend-store-uri file:./mlruns
+	uv run mlflow ui --backend-store-uri file:./mlruns
 
 requirements:
 	uv export -o requirements.txt
 
+# Manage API accounts, e.g. make users ARGS="create alice --role admin"
+# Needs JWT_SECRET_KEY from .env, like the API itself.
+users:
+	uv run python -m src.api.manage_users $(ARGS)
+
 preprocess:
-	python -m src.data.preprocess
+	uv run python -m src.data.preprocess
 
 train:
-	python -m src.training.train
+	uv run python -m src.training.train
 
 train-sample:
-	python -m src.training.train --sample
+	uv run python -m src.training.train --sample
 
 tune:
-	python -m src.training.train --tune
+	uv run python -m src.training.train --tune
 
 tune-sample:
-	python -m src.training.train --tune --sample
+	uv run python -m src.training.train --tune --sample
 
 evaluate:
-	python -m src.training.evaluate
+	uv run python -m src.training.evaluate
 
 preprocess-train-evaluate:
-	python -m src.data.preprocess && python -m src.training.train && python -m src.training.evaluate
+	uv run python -m src.data.preprocess && \
+	uv run python -m src.training.train && \
+	uv run python -m src.training.evaluate
