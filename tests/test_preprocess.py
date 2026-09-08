@@ -162,11 +162,19 @@ def test_preprocess_all_uses_pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(preprocess, "build_target", lambda df: df.assign(grave=[0, 1]))
     monkeypatch.setattr(preprocess, "engineer_features", lambda df: df)
 
-    # Prevent actual file writes by overriding PROCESSED_DIR and DataFrame.to_parquet
+    # Prevent actual file writes by overriding the output paths and
+    # DataFrame.to_parquet. TRAIN_PATH and TEST_PATH are resolved at import
+    # time, so patching PROCESSED_DIR alone leaves them pointing at the real
+    # data/processed/, which no longer exists in Git since it moved to DVC.
     monkeypatch.setattr(preprocess, "PROCESSED_DIR", tmp_path)
+    monkeypatch.setattr(preprocess, "TRAIN_PATH", tmp_path / "train.parquet")
+    monkeypatch.setattr(preprocess, "TEST_PATH", tmp_path / "test.parquet")
     saved = {}
 
     def fake_to_parquet(self, path, index=False):
+        # Write a real (empty) file: preprocess_all calls .stat() on it to
+        # log the written size.
+        Path(path).write_bytes(b"")
         saved[str(path)] = True
 
     monkeypatch.setattr(pd.DataFrame, "to_parquet", fake_to_parquet)
