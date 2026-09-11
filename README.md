@@ -123,6 +123,8 @@ backend, which is enough to run the pipeline offline.
 ## Running with Docker
 
 Services are defined in `docker-compose.yml` and read credentials from `.env`.
+The API needs `JWT_SECRET_KEY` there or it refuses to start, see
+[Authentication](#authentication).
 
 ```bash
 docker-compose up -d --build api     # inference API on http://localhost:8000
@@ -166,14 +168,21 @@ ReDoc documentation: http://localhost:8000/redoc
 ```
 
 Endpoints:
-```bash
-GET /health
-Returns the health status of the API, whether a model is loaded, and the version
-of the model currently served ("local" when loaded from the fallback file).
 
-POST /predict
-Performs inference using the trained XGBoost model.
-```
+| Endpoint | Access | Purpose |
+|---|---|---|
+| `GET /health` | public | Liveness, whether a model is loaded, and the served version |
+| `POST /token` | public | Exchanges username and password for an access token |
+| `GET /me` | any logged-in user | Returns the account behind the current token |
+| `POST /predict` | operator, admin | Runs inference |
+| `POST /admin/users` | admin | Creates an account |
+| `GET /admin/users` | admin | Lists accounts |
+| `DELETE /admin/users/{username}` | admin | Disables an account |
+
+`/health` stays public so Docker and the reverse proxy can probe it; every
+other endpoint except `/token` requires a token (see
+[Authentication](#authentication)).
+
 Request Body:
 The request must contain a list of feature values in the same order used during model training.
 
@@ -194,6 +203,51 @@ Example Response
 ```
 `model_version` is the MLflow registry version currently served, or `"local"`
 when the API fell back to the on-disk model.
+
+## Authentication
+
+The API is meant for emergency call centre staff, so `/predict` is not open:
+callers log in and use a short-lived token. Two roles exist, `operator` (runs
+predictions) and `admin` (also manages accounts). Machine callers such as
+Airflow get an `operator` account under their own username.
+
+Set `JWT_SECRET_KEY` in `.env` before starting. It signs the tokens, so a weak
+value would let anyone forge them: the API refuses to start if it is missing
+or shorter than 32 characters.
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Accounts live in a SQLite database (`data/api_users.db`, gitignored: it holds
+password hashes). Create the first admin from the command line, since
+`/admin/users` is itself admin-only:
+
+```bash
+docker-compose run --rm api uv run python -m src.api.manage_users create <name> --role admin
+```
+
+The same script offers `list` and `disable`. The password is prompted rather
+than passed as an argument, so it stays out of the shell history.
+
+Log in, then send the token on every call:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8000/token \
+  -d "username=<name>&password=<password>" | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -X POST http://localhost:8000/predict \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"features": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}'
+```
+
+Tokens expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (30 by default). Disabling an
+account takes effect immediately rather than at expiry: the API re-reads the
+account on every request, so a revoked operator cannot keep working with a
+token issued moments earlier.
+
+Swagger UI at `/docs` has an **Authorize** button that performs the same login.
 
 Important: `features` must list the 40 values in the exact order the model
 expects. The authoritative order is the one carried by the served model itself

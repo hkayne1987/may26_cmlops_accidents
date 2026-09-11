@@ -1,9 +1,13 @@
 # Build context exclusions.
-# The Dockerfiles only need pyproject.toml, uv.lock, src/, models/ and
-# data/processed/ — everything else here would just slow the build down.
+# The Dockerfiles only need pyproject.toml, uv.lock, src/ and models/ —
+# data is bind-mounted at run time, and everything else listed here would
+# just slow the build down.
 
 # Secrets: never send credentials into the build context
 .env
+# API user accounts (password hashes): mounted as a volume at run time,
+# it must never end up baked into an image.
+data/api_users.db
 
 # Version control and local virtualenv (the image runs uv sync itself)
 .git/
@@ -48,5 +52,4 @@ reports/
 .DS_Store
 
 # Note: DVC files (.dvc/, *.dvc, dvc.yaml, dvc.lock) are deliberately NOT
-# excluded — they will be needed in the build context once the DVC pipeline
-# is in place.
+# excluded — the DVC container needs them to resolve the project root.
