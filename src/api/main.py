@@ -58,7 +58,7 @@ model_version: str = "unknown"
 # it cannot drift from the served version. None until a model is loaded.
 n_features_expected: int | None = None
 
-DECISION_THRESHOLD = 0.30  # decision threshold for the severe class
+DECISION_THRESHOLD = 0.35  # decision threshold for the severe class
 
 
 def load_model_from_registry() -> tuple[Any, str]:
@@ -90,10 +90,18 @@ def load_model_from_registry() -> tuple[Any, str]:
 
 
 def load_model_from_disk() -> tuple[Any, str]:
-    """Loads the model from the local joblib file (fallback)."""
-    if not os.path.exists(model_path):
+    """Loads the model from the local joblib file (fallback).
+
+    An interrupted training run can leave an empty or truncated file here, so
+    report no model rather than crashing the API on a corrupt one.
+    """
+    if not os.path.exists(model_path) or os.path.getsize(model_path) == 0:
         return None, "unknown"
-    loaded = joblib.load(model_path)
+    try:
+        loaded = joblib.load(model_path)
+    except Exception as e:
+        log.error(f"Local model file is unusable ({type(e).__name__}): {model_path}")
+        return None, "unknown"
     log.info(f"Model loaded from local file: {model_path}")
     return loaded, "local"
 
@@ -120,20 +128,30 @@ def load_model(attempts: int = 3, backoff: float = 5.0) -> tuple[Any, str]:
     return load_model_from_disk()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global model, model_version, n_features_expected
+def refresh_model() -> None:
+    """Loads the production model and updates the module state.
 
-    # Fail fast on a missing or weak signing key rather than starting an
-    # API whose tokens anyone could forge.
-    get_secret_key()
+    Shared by startup and the reload endpoint so both go through exactly the
+    same path.
+    """
+    global model, model_version, n_features_expected
 
     model, model_version = load_model()
     if model is None:
         log.warning("No model available from registry or local file")
+        n_features_expected = None
     else:
         n_features_expected = getattr(model, "n_features_in_", None)
         log.info(f"Model expects {n_features_expected} features")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Fail fast on a missing or weak signing key rather than starting an
+    # API whose tokens anyone could forge.
+    get_secret_key()
+
+    refresh_model()
     yield
 
 
@@ -213,7 +231,7 @@ async def read_current_user(user: User = Depends(get_current_user)):
 @app.post("/predict", response_model=PredictResponse, tags=["inference"])
 async def predict(
     request: PredictRequest,
-    user: User = Depends(require_role(Role.OPERATOR, Role.ADMIN)),
+    user: User = Depends(require_role(Role.OPERATOR, Role.SERVICE, Role.ADMIN)),
 ):
     """Makes a prediction using the loaded model. Requires a valid token."""
     global model
@@ -280,6 +298,27 @@ async def add_user(
 
     log.info(f"{admin.username} created account {user.username}")
     return UserInfo(username=user.username, role=user.role, is_active=user.is_active)
+
+
+@app.post("/admin/reload-model", response_model=HealthResponse, tags=["admin"])
+async def reload_model(
+    caller: User = Depends(require_role(Role.SERVICE, Role.ADMIN)),
+):
+    """Reloads the production model from the registry, without a restart.
+
+    Called by the Airflow pipeline once a new version clears the release
+    gate, so operators get the new model with no downtime.
+    """
+    previous = model_version
+    refresh_model()
+    log.info(
+        f"{caller.username} reloaded the model: v{previous} -> v{model_version}"
+    )
+    return HealthResponse(
+        status="healthy",
+        model_loaded=model is not None,
+        model_version=model_version,
+    )
 
 
 @app.get("/admin/users", response_model=list[UserInfo], tags=["admin"])

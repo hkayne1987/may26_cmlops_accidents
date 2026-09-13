@@ -23,6 +23,7 @@ from src.api import main as main_module  # noqa: E402
 
 OPERATOR_PW = "operator-password"
 ADMIN_PW = "admin-password-1"
+SERVICE_PW = "service-password"
 
 
 @pytest.fixture
@@ -39,9 +40,10 @@ def client(monkeypatch):
     with Session(engine) as session:
         auth_module.create_user(session, "operator1", OPERATOR_PW, auth_module.Role.OPERATOR)
         auth_module.create_user(session, "admin1", ADMIN_PW, auth_module.Role.ADMIN)
+        auth_module.create_user(session, "airflow1", SERVICE_PW, auth_module.Role.SERVICE)
 
     # Stub model: two classes, probability of the severe class above the
-    # 0.30 threshold so the prediction is deterministic. predict_proba must
+    # 0.35 threshold so the prediction is deterministic. predict_proba must
     # return a numpy array, since the endpoint calls .tolist() on the row.
     model = MagicMock()
     model.predict_proba.return_value = np.array([[0.2, 0.8]])
@@ -129,7 +131,7 @@ def test_predict_with_valid_token_succeeds(client):
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["prediction"] == 1  # 0.8 >= 0.30
+    assert body["prediction"] == 1  # 0.8 >= 0.35
     assert body["model_version"] == "test"
 
 
@@ -189,6 +191,63 @@ def test_admin_cannot_deactivate_itself(client):
         "/admin/users/admin1", headers=auth_header(client, "admin1", ADMIN_PW)
     )
     assert response.status_code == 400
+
+
+def test_service_can_reload_the_model(client):
+    response = client.post(
+        "/admin/reload-model", headers=auth_header(client, "airflow1", SERVICE_PW)
+    )
+    assert response.status_code == 200
+    assert response.json()["model_loaded"] is True
+
+
+def test_service_cannot_manage_users(client):
+    """The pipeline account must not be able to touch operator accounts."""
+    response = client.post(
+        "/admin/users",
+        json={"username": "newbie", "password": "some-password", "role": "operator"},
+        headers=auth_header(client, "airflow1", SERVICE_PW),
+    )
+    assert response.status_code == 403
+
+
+def test_operator_cannot_reload_the_model(client):
+    response = client.post(
+        "/admin/reload-model", headers=auth_header(client, "operator1", OPERATOR_PW)
+    )
+    assert response.status_code == 403
+
+
+def test_reload_requires_a_token(client):
+    assert client.post("/admin/reload-model").status_code == 401
+
+
+def test_service_can_predict(client):
+    response = client.post(
+        "/predict", json=FEATURES, headers=auth_header(client, "airflow1", SERVICE_PW)
+    )
+    assert response.status_code == 200
+
+
+def test_empty_local_model_file_does_not_crash(tmp_path, monkeypatch):
+    """An interrupted training run can leave a 0-byte model file behind."""
+    empty = tmp_path / "xgb_severity.joblib"
+    empty.write_bytes(b"")
+    monkeypatch.setattr(main_module, "model_path", empty)
+
+    loaded, version = main_module.load_model_from_disk()
+    assert loaded is None
+    assert version == "unknown"
+
+
+def test_corrupt_local_model_file_does_not_crash(tmp_path, monkeypatch):
+    corrupt = tmp_path / "xgb_severity.joblib"
+    corrupt.write_bytes(b"not a joblib file")
+    monkeypatch.setattr(main_module, "model_path", corrupt)
+
+    loaded, version = main_module.load_model_from_disk()
+    assert loaded is None
+    assert version == "unknown"
 
 
 def test_me_returns_the_caller(client):
