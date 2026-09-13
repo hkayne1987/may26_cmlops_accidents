@@ -65,7 +65,11 @@ metrics/
 #Model
 *.joblib
 models/run_id.txt
+models/model_version.txt
 models/metrics.json
+
+# Airflow metadata database and logs (generated at run time)
+airflow_data/
 
 # API user accounts: contains password hashes, never commit
 data/api_users.db
