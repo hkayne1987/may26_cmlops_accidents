@@ -20,8 +20,13 @@ TRAIN_PATH = PROCESSED_DIR / "train.parquet"
 TEST_PATH = PROCESSED_DIR / "test.parquet"
 
 # --- Numeric variable definitions (the rest will be categorical) ---------------
+# lat and long are continuous coordinates. Left out of this list they were
+# typed as categorical, giving XGBoost ~310k modalities each to carry around:
+# an 873 MB model that needed several GB of RAM to train. As numerics the
+# model drops to 49 MB, trains 6x faster, and scores slightly better.
 NUMERIC_FEATURES = ["age", "heure", "minute", "jour", "mois", "an",
-                    "vma", "nbv", "lartpc", "larrout", "occutc"]
+                    "vma", "nbv", "lartpc", "larrout", "occutc",
+                    "lat", "long"]
 
 # Columns to exclude from features (target, identifiers, free text, redundancies)
 DROP_COLS = ["grav", "grave", "Num_Acc", "id_usager", "id_vehicule", "num_veh",
