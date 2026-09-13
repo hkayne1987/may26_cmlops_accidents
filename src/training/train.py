@@ -27,21 +27,27 @@ TRAIN_PATH = Path("data/processed/train.parquet")
 MODEL_DIR = Path("models")
 TEST_SIZE = 0.2
 RANDOM_STATE = 0
-DECISION_THRESHOLD = 0.30  # decision threshold for the severe class
+DECISION_THRESHOLD = 0.35  # decision threshold for the severe class
 
 REGISTERED_MODEL_NAME = "xgb_severity"
-PRODUCTION_ALIAS = "production"
+# The production alias lives in src/training/promote.py: training registers a
+# version, promoting it is a separate, metric-gated step.
 MODEL_FILENAME = f"{REGISTERED_MODEL_NAME}.joblib"
 RUN_ID_PATH = MODEL_DIR / "run_id.txt"  # read by evaluate.py to resume this run
+VERSION_PATH = MODEL_DIR / "model_version.txt"  # read by promote.py
 
-# Hyperparameters retained after a GridSearchCV (scoring="f1", 3-fold StratifiedGroupKFold) run on year 2023 only (~125k users).
+# Hyperparameters retained after a GridSearchCV (scoring="roc_auc", 3-fold
+# StratifiedGroupKFold) over the full 2019-2024 dataset (595884 users).
 # Tested grid: max_depth=[3, 5, 7], learning_rate=[0.05, 0.1, 0.2], n_estimators=[50, 100, 200, 300].
-# Best F1 score obtained: 0.586.
-# See tune_hyperparameters() to reproduce or re-optimize on the full 2019-2024 dataset.
+# Best cross-validated AUC-ROC: 0.8723.
+#
+# Deeper trees with a slower learning rate replaced the previous shallow
+# setup once lat/long became numeric: continuous splits on coordinates are
+# only useful at depth. See tune_hyperparameters() to re-run the search.
 HYPERPARAMS = {
-    "max_depth": 3,
-    "learning_rate": 0.2,
-    "n_estimators": 300,
+    "max_depth": 7,
+    "learning_rate": 0.05,
+    "n_estimators": 100,
 }
 
 
@@ -79,6 +85,13 @@ def tune_hyperparameters(X_train, y_train, groups_train):
     """Hyperparameter search via grid search (optional, not run by default).
     Takes time.
     Usage: python -m src.training.train --tune
+
+    Scored on AUC-ROC rather than F1: AUC measures how well the model ranks
+    severe cases above non-severe ones, independently of any threshold. The
+    recall/precision trade-off a call centre needs is then set by the decision
+    threshold (see threshold_search in evaluate.py), which keeps the two
+    decisions separate. Scoring on F1 would instead bake one particular
+    trade-off into the hyperparameters themselves.
     """
     from sklearn.model_selection import GridSearchCV, StratifiedGroupKFold
 
@@ -93,26 +106,37 @@ def tune_hyperparameters(X_train, y_train, groups_train):
     grid = GridSearchCV(
         XGBClassifier(scale_pos_weight=scale, enable_categorical=True, tree_method="hist",
                       eval_metric="logloss", random_state=RANDOM_STATE),
-        param_grid, scoring="f1", cv=cv, n_jobs=-1, verbose=2,
+        param_grid, scoring="roc_auc", cv=cv, n_jobs=-1, verbose=2,
     )
     grid.fit(X_train, y_train, groups=groups_train)
 
     log.info(f"Best parameters: {grid.best_params_}")
-    log.info(f"Best F1 score: {grid.best_score_:.4f}")
+    log.info(f"Best AUC-ROC: {grid.best_score_:.4f}")
     return grid.best_params_
 
 
 def save_model(model, X_train):
-    """Saves the model + the ordered list of columns expected at inference."""
+    """Saves the model + the ordered list of columns expected at inference.
+
+    Both files are written to a temporary path and then renamed, because the
+    rename is atomic while a 100+ MB dump is not. An interrupted training run
+    (a cancelled Airflow task, a stopped container) would otherwise leave a
+    truncated file exactly where the API looks for its fallback model.
+    """
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
     model_path = MODEL_DIR / MODEL_FILENAME
-    joblib.dump(model, model_path)
+    tmp_model = model_path.with_suffix(model_path.suffix + ".tmp")
+    joblib.dump(model, tmp_model)
+    tmp_model.replace(model_path)
     log.info(f"Model saved: {model_path}")
 
     # Also save the column schema
     # Required for the API which must reconstruct a DataFrame with exactly these columns
     schema_path = MODEL_DIR / "feature_columns.json"
-    pd.Series(X_train.columns).to_json(schema_path, orient="values")
+    tmp_schema = schema_path.with_suffix(".json.tmp")
+    pd.Series(X_train.columns).to_json(tmp_schema, orient="values")
+    tmp_schema.replace(schema_path)
     log.info(f"Feature schema saved: {schema_path}")
 
 
@@ -125,8 +149,12 @@ def get_data_version() -> str:
 
 
 def log_mlflow_run(model, X_train) -> str:
-    """Logs the training run to MLflow: hyperparameters, data lineage, and the
-    model registered under REGISTERED_MODEL_NAME with a 'production' alias + tag.
+    """Logs the training run to MLflow and registers the model.
+
+    The model is registered but NOT promoted: moving the 'production' alias is
+    a separate step (src/training/promote.py) that runs only once the metrics
+    clear the release thresholds. Training alone must never change what the
+    API serves to emergency call centre operators.
 
     Returns the MLflow run_id so evaluate.py can resume this same run to log metrics.
     """
@@ -151,19 +179,17 @@ def log_mlflow_run(model, X_train) -> str:
 
         client = mlflow.MlflowClient()
         version = model_info.registered_model_version
-        client.set_registered_model_alias(
-            name=REGISTERED_MODEL_NAME, alias=PRODUCTION_ALIAS, version=version,
-        )
-        client.set_model_version_tag(
-            name=REGISTERED_MODEL_NAME, version=version, key="stage", value="production",
-        )
         client.set_model_version_tag(
             name=REGISTERED_MODEL_NAME, version=version,
             key="decision_threshold", value=str(DECISION_THRESHOLD),
         )
 
+        # Record which version this run produced so promote.py can find it.
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        VERSION_PATH.write_text(str(version))
+
         log.info(f"MLflow run {run.info.run_id}: registered {REGISTERED_MODEL_NAME} "
-                 f"v{version} (alias={PRODUCTION_ALIAS})")
+                 f"v{version} (not promoted yet)")
         return run.info.run_id
 
 

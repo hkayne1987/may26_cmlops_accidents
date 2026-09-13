@@ -68,13 +68,28 @@ def test_save_model_writes_files(monkeypatch, tmp_path):
 
     monkeypatch.setattr(train_module, "MODEL_DIR", tmp_path)
 
-    dump_mock = MagicMock()
+    # save_model writes to a .tmp path and renames it, so the fakes must
+    # actually create the file for the rename to succeed.
+    def fake_dump(obj, path):
+        Path(path).write_bytes(b"model")
+
+    dump_mock = MagicMock(side_effect=fake_dump)
     monkeypatch.setattr(train_module.joblib, "dump", dump_mock)
 
-    to_json_mock = MagicMock()
+    # Replacing the method with a MagicMock drops the bound self, so the
+    # fake receives only the arguments save_model passes.
+    def fake_to_json(path, orient=None):
+        Path(path).write_text("[]")
+
+    to_json_mock = MagicMock(side_effect=fake_to_json)
     monkeypatch.setattr(train_module.pd.Series, "to_json", to_json_mock)
 
     train_module.save_model(model, X_train)
 
     dump_mock.assert_called_once()
     assert to_json_mock.called
+
+    # The final files exist under their real names, and no .tmp is left behind.
+    assert (tmp_path / train_module.MODEL_FILENAME).exists()
+    assert (tmp_path / "feature_columns.json").exists()
+    assert list(tmp_path.glob("*.tmp")) == []
