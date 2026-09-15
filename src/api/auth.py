@@ -41,13 +41,14 @@ MIN_PASSWORD_LENGTH = 12
 class Role(str, Enum):
     """Who can do what.
 
-    operator: runs predictions. Emergency call centre staff, and machine
-              accounts such as Airflow, which are told apart by their
-              username rather than by a separate role.
-    admin:    manages user accounts on top of operator rights.
+    operator: runs predictions. Emergency call centre staff.
+    service:  machine accounts (the Airflow pipeline). Runs predictions and
+              reloads the production model, but cannot touch user accounts.
+    admin:    everything, including managing user accounts.
     """
 
     OPERATOR = "operator"
+    SERVICE = "service"
     ADMIN = "admin"
 
 

@@ -10,6 +10,8 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
+    # Pinned like the other images, so names do not depend on the directory.
+    image: baac-api:latest
     ports:
       - "8000:8000"
     env_file:
@@ -36,6 +38,9 @@ services:
     build:
       context: .
       dockerfile: docker/train.Dockerfile
+    # Pinned so the name does not depend on the directory the repo sits in:
+    # the Airflow DAG starts this image by name.
+    image: baac-training:latest
     env_file:
       - .env
     volumes:
@@ -53,6 +58,8 @@ services:
     build:
       context: .
       dockerfile: docker/dvc.Dockerfile
+    # Pinned for the same reason as the training image.
+    image: baac-dvc:latest
     env_file:
       - .env
     volumes:
@@ -61,6 +68,47 @@ services:
       - .:/app
     profiles:
       - dvc
+
+  # Airflow: orchestrates the end-to-end pipeline (Phase 3).
+  # Usage: docker-compose --profile airflow up -d   -> http://localhost:8080
+  # Runs in standalone mode (scheduler, API server and a SQLite metadata
+  # database in one container), which is enough to drive a manually
+  # triggered pipeline locally.
+  airflow:
+    image: apache/airflow:3.3.1
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      # Absolute path of the repo on the host. The task containers are
+      # siblings of this one, so their bind mounts are resolved by the host
+      # daemon and a path inside this container would not exist.
+      - HOST_PROJECT_DIR=${PWD}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      # Point the metadata database at the persisted subdirectory.
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/db/airflow.db
+      - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs
+    volumes:
+      - ./dags:/opt/airflow/dags
+      # Only the metadata database and logs are persisted. Mounting
+      # /opt/airflow itself would mask the Airflow installation in the image.
+      - ./airflow_data/db:/opt/airflow/db
+      - ./airflow_data/logs:/opt/airflow/logs
+      # Lets Airflow start the training and DVC containers on the host daemon.
+      # This is a privileged access: anything Airflow runs can control Docker.
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Stay the image's own airflow user (Airflow lives in its ~/.local, which
+    # root cannot import), but join the group owning the Docker socket so the
+    # DockerOperator can reach it. 991 is the socket's group inside the Colima
+    # VM: check with `ls -ln /var/run/docker.sock` if tasks fail on permission.
+    user: "50000:0"
+    group_add:
+      - "991"
+    command: standalone
+    profiles:
+      - airflow
 
   # Prometheus monitoring (Phase 4)
   prometheus:

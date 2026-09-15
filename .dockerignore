@@ -28,6 +28,9 @@ prometheus_data/
 grafana_data/
 minio_data/
 
+# Airflow metadata database and logs
+airflow_data/
+
 # Python caches and test/lint artifacts
 __pycache__/
 *.py[cod]

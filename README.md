@@ -174,7 +174,8 @@ Endpoints:
 | `GET /health` | public | Liveness, whether a model is loaded, and the served version |
 | `POST /token` | public | Exchanges username and password for an access token |
 | `GET /me` | any logged-in user | Returns the account behind the current token |
-| `POST /predict` | operator, admin | Runs inference |
+| `POST /predict` | operator, service, admin | Runs inference |
+| `POST /admin/reload-model` | service, admin | Reloads the production model without a restart |
 | `POST /admin/users` | admin | Creates an account |
 | `GET /admin/users` | admin | Lists accounts |
 | `DELETE /admin/users/{username}` | admin | Disables an account |
@@ -197,8 +198,8 @@ Example Response
 ```bash
 {
   "prediction": 0,
-  "probabilities": [0.9995688199996948, 0.00043118116445839405],
-  "model_version": "2"
+  "probabilities": [0.8578826785087585, 0.14211730659008026],
+  "model_version": "6"
 }
 ```
 `model_version` is the MLflow registry version currently served, or `"local"`
@@ -207,9 +208,13 @@ when the API fell back to the on-disk model.
 ## Authentication
 
 The API is meant for emergency call centre staff, so `/predict` is not open:
-callers log in and use a short-lived token. Two roles exist, `operator` (runs
-predictions) and `admin` (also manages accounts). Machine callers such as
-Airflow get an `operator` account under their own username.
+callers log in and use a short-lived token. Three roles exist:
+
+| Role | Can |
+|---|---|
+| `operator` | Run predictions. Call centre staff. |
+| `service` | Run predictions and reload the production model, but not touch accounts. Used by the Airflow pipeline. |
+| `admin` | Everything, including managing accounts. |
 
 Set `JWT_SECRET_KEY` in `.env` before starting. It signs the tokens, so a weak
 value would let anyone forge them: the API refuses to start if it is missing
@@ -260,6 +265,67 @@ uv run python -c "import json; print(json.load(open('models/feature_columns.json
 
 Both come from the same training run, so they match — but if you ever retrain
 without committing the updated schema, trust the served model over the file.
+
+## Orchestration (Airflow)
+
+The `ml_pipeline` DAG runs the whole chain, each step in the container it
+already ships with, so Airflow adds orchestration without duplicating a single
+dependency:
+
+```
+dvc_pull -> preprocess -> train -> evaluate -> promote -> reload_api
+```
+
+```bash
+docker-compose --profile airflow up -d     # http://localhost:8080
+```
+
+Trigger it from the UI or the command line:
+
+```bash
+docker-compose --profile airflow exec airflow airflow dags trigger ml_pipeline
+```
+
+`schedule=None`: the pipeline runs only when someone asks. A model change in a
+service used by emergency call centres should be a decision, not the side
+effect of a nightly job.
+
+### The release gate
+
+`train` registers a new model version but does not put it in production.
+`promote` does, and only when the metrics logged by `evaluate` clear the
+thresholds in `src/training/promote.py`:
+
+| Metric | Minimum | Override |
+|---|---|---|
+| `auc_roc` | 0.85 | `MIN_AUC_ROC` |
+| `recall` (severe class) | 0.85 | `MIN_RECALL_SEVERE` |
+
+Recall comes first: reporting a severe accident as minor is worse than
+over-flagging a minor one. Both values sit a few points below what a full
+training run produces (auc 0.8763, recall 0.8961), so a comparable model passes
+and a degraded one does not.
+
+When a metric falls short, `promote` fails, `reload_api` never runs, and the
+previous model keeps serving. A red `promote` task means production is
+untouched, which is the intended outcome rather than an incident.
+
+Missing metrics count as a failure too: an unmeasured model must not reach
+production.
+
+### Requirements
+
+The DAG needs a `service` account for the API (`reload_api` calls
+`/admin/reload-model`), and `API_PASSWORD` set in `.env`:
+
+```bash
+make users ARGS="create airflow_service --role service"
+```
+
+Airflow starts the task containers through the host Docker socket, mounted into
+its own container. That is a privileged access: anything running in Airflow can
+control Docker on the host. Acceptable locally, to revisit before any real
+deployment.
 
 ## Project structure
 
