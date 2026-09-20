@@ -11,6 +11,7 @@ header. Roles are carried in the token and checked per endpoint.
 
 import logging
 import os
+from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
@@ -81,6 +82,20 @@ class UserInfo(BaseModel):
     role: Role
     is_active: bool
 
+    @classmethod
+    def from_user(cls, user: "User") -> "UserInfo":
+        """Builds the response model from a database row.
+
+        The role is stored as a plain string, so converting it here also
+        validates it: an unknown value raises instead of reaching a caller
+        that expects one of the known roles.
+        """
+        return cls(
+            username=user.username,
+            role=Role(user.role),
+            is_active=user.is_active,
+        )
+
 
 def get_secret_key() -> str:
     """Returns the JWT signing key, refusing to start without a strong one.
@@ -144,7 +159,7 @@ def get_engine(db_path: str | None = None):
 _engine = None
 
 
-def get_session() -> Session:
+def get_session() -> Iterator[Session]:
     """Yields a database session (FastAPI dependency)."""
     global _engine
     if _engine is None:
@@ -156,9 +171,7 @@ def get_session() -> Session:
 def create_user(session: Session, username: str, password: str, role: Role) -> User:
     """Creates a user. Raises ValueError if the name is taken."""
     if len(password) < MIN_PASSWORD_LENGTH:
-        raise ValueError(
-            f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
-        )
+        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
     if session.get(User, username) is not None:
         raise ValueError(f"User {username!r} already exists")
 

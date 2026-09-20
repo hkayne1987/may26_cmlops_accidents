@@ -2,10 +2,11 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-
 from sklearn.model_selection import GroupShuffleSplit
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 log = logging.getLogger(__name__)
 
 RAW_DIR = Path("data/raw")
@@ -24,14 +25,43 @@ TEST_PATH = PROCESSED_DIR / "test.parquet"
 # typed as categorical, giving XGBoost ~310k modalities each to carry around:
 # an 873 MB model that needed several GB of RAM to train. As numerics the
 # model drops to 49 MB, trains 6x faster, and scores slightly better.
-NUMERIC_FEATURES = ["age", "heure", "minute", "jour", "mois", "an",
-                    "vma", "nbv", "lartpc", "larrout", "occutc",
-                    "lat", "long"]
+NUMERIC_FEATURES = [
+    "age",
+    "heure",
+    "minute",
+    "jour",
+    "mois",
+    "an",
+    "vma",
+    "nbv",
+    "lartpc",
+    "larrout",
+    "occutc",
+    "lat",
+    "long",
+]
 
 # Columns to exclude from features (target, identifiers, free text, redundancies)
-DROP_COLS = ["grav", "grave", "Num_Acc", "id_usager", "id_vehicule", "num_veh",
-            "an_nais", "adr", "voie", "hrmn","lartpc", "larrout", "v1", "v2",
-            "pr", "pr1","motor", "trajet"]
+DROP_COLS = [
+    "grav",
+    "grave",
+    "Num_Acc",
+    "id_usager",
+    "id_vehicule",
+    "num_veh",
+    "an_nais",
+    "adr",
+    "voie",
+    "hrmn",
+    "lartpc",
+    "larrout",
+    "v1",
+    "v2",
+    "pr",
+    "pr1",
+    "motor",
+    "trajet",
+]
 
 # Column name harmonization across years (BAAC schema drift)
 # 2022 names the accident identifier "Accident_Id" instead of "Num_Acc".
@@ -41,7 +71,8 @@ RENAME_COLS = {
 
 
 def load_year(year: int):
-    """Loads the 4 tables for a given year as strings, stripping leading spaces from column names.
+    """Loads the 4 tables for a given year as strings, stripping leading
+    spaces from column names.
 
     Returns a dict {table_name: DataFrame}.
     """
@@ -61,14 +92,18 @@ def load_year(year: int):
         df = df.rename(columns=RENAME_COLS)
 
         tables[name] = df
-        log.info(f"{year} | {name:18s} : {df.shape[0]:>7} rows, {df.shape[1]:>2} columns")
+        log.info(
+            f"{year} | {name:18s} : {df.shape[0]:>7} rows, {df.shape[1]:>2} columns"
+        )
 
     return tables
+
 
 def merge_tables(tables: dict[str, pd.DataFrame]):
     """Merges the 4 tables (1 row = 1 person involved).
 
-    - lieux is reduced to 1 row per accident (first occurrence: simple choice for intersection accidents).
+    - lieux is reduced to 1 row per accident (first occurrence: simple
+      choice for intersection accidents).
     - usagers x vehicules on id_vehicule (unique key from 2019+).
     - then x caracteristiques and x lieux on Num_Acc.
     """
@@ -78,14 +113,17 @@ def merge_tables(tables: dict[str, pd.DataFrame]):
     usagers = tables["usagers"]
 
     # lieux: 1 row per accident (first occurrence)
-    lieux_unique = lieux.drop_duplicates(subset="Num_Acc", keep="first").reset_index(drop=True)
+    lieux_unique = lieux.drop_duplicates(subset="Num_Acc", keep="first").reset_index(
+        drop=True
+    )
 
     # Drop num_veh from vehicules since usagers already carries it
     veh = vehicules.drop(columns=[c for c in ["num_veh"] if c in vehicules.columns])
 
     n_usagers = len(usagers)
 
-    # usagers x vehicules on id_vehicule. Keep Num_Acc on both sides for the next join: merge on ["Num_Acc", "id_vehicule"].
+    # usagers x vehicules on id_vehicule. Keep Num_Acc on both sides for the
+    # next join: merge on ["Num_Acc", "id_vehicule"].
     df = usagers.merge(veh, on=["Num_Acc", "id_vehicule"], how="left", validate="m:1")
     # x caracteristiques
     df = df.merge(carac, on="Num_Acc", how="left", validate="m:1")
@@ -102,9 +140,9 @@ def merge_tables(tables: dict[str, pd.DataFrame]):
     return df
 
 
-
 def build_target(df: pd.DataFrame):
-    """Creates the binary target 'grave' covering the initial targets killed (2) and hospitalized (3).
+    """Creates the binary target 'grave' covering the initial targets
+    killed (2) and hospitalized (3).
 
     Removes users with no recorded severity (grav = -1).
     """
@@ -152,23 +190,30 @@ def build_feature_matrix(df: pd.DataFrame):
     for c in NUMERIC_FEATURES:
         if c in X.columns:
             if X[c].dtype == "object":
-                X[c] = pd.to_numeric(X[c].str.replace(",", ".", regex=False), errors="coerce")
+                X[c] = pd.to_numeric(
+                    X[c].str.replace(",", ".", regex=False), errors="coerce"
+                )
             else:
                 X[c] = pd.to_numeric(X[c], errors="coerce")
 
-    log.info(f"build_feature_matrix | X={X.shape}, "
-             f"{len(categorical_features)} categorical, "
-             f"{len([c for c in NUMERIC_FEATURES if c in X.columns])} numeric")
+    log.info(
+        f"build_feature_matrix | X={X.shape}, "
+        f"{len(categorical_features)} categorical, "
+        f"{len([c for c in NUMERIC_FEATURES if c in X.columns])} numeric"
+    )
     return X, y, groups
 
 
 def split_train_test(df: pd.DataFrame):
-    """Grouped split by accident: all users from an accident go into the same group (train or test).
+    """Grouped split by accident: all users from an accident go into the
+    same group (train or test).
 
     Returns (df_train, df_test).
     """
     groups = df["Num_Acc"]
-    splitter = GroupShuffleSplit(n_splits=1, test_size=TEST_SIZE, random_state=RANDOM_STATE)
+    splitter = GroupShuffleSplit(
+        n_splits=1, test_size=TEST_SIZE, random_state=RANDOM_STATE
+    )
     train_idx, test_idx = next(splitter.split(df, df["grave"], groups=groups))
 
     df_train = df.iloc[train_idx].reset_index(drop=True)
@@ -179,10 +224,14 @@ def split_train_test(df: pd.DataFrame):
     if overlap:
         raise ValueError(f"Data leak: {len(overlap)} accidents in both train AND test.")
 
-    log.info(f"Split | train {len(df_train)} users ({df_train['Num_Acc'].nunique()} acc.) "
-             f"/ test {len(df_test)} users ({df_test['Num_Acc'].nunique()} acc.)")
-    log.info(f"Split | proportion 'severe' — train {df_train['grave'].mean():.1%} "
-             f"/ test {df_test['grave'].mean():.1%}")
+    log.info(
+        f"Split | train {len(df_train)} users ({df_train['Num_Acc'].nunique()} acc.) "
+        f"/ test {len(df_test)} users ({df_test['Num_Acc'].nunique()} acc.)"
+    )
+    log.info(
+        f"Split | proportion 'severe' — train {df_train['grave'].mean():.1%} "
+        f"/ test {df_test['grave'].mean():.1%}"
+    )
     return df_train, df_test
 
 
@@ -205,7 +254,9 @@ def preprocess_all():
     # Fix categories on the full dataset before splitting, to ensure
     # that train and test share the same feature schema
     # (XGBoost categorical rejects any category seen in test but absent from train).
-    categorical_cols = [c for c in full.columns if c not in NUMERIC_FEATURES and c not in DROP_COLS]
+    categorical_cols = [
+        c for c in full.columns if c not in NUMERIC_FEATURES and c not in DROP_COLS
+    ]
     for c in categorical_cols:
         full[c] = full[c].astype(str).str.strip().astype("category")
 

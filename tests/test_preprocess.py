@@ -2,14 +2,13 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import data.preprocess as preprocess
+import src.data.preprocess as preprocess
 
 
 def make_csv(tmp_path, name, year, content):
@@ -48,10 +47,17 @@ def test_merge_tables_success():
     # Build minimal consistent tables
     carac = pd.DataFrame({"Num_Acc": [1, 2], "c": [10, 20]})
     lieux = pd.DataFrame({"Num_Acc": [1, 2], "l": [100, 200]})
-    vehicules = pd.DataFrame({"Num_Acc": [1, 2], "id_vehicule": [11, 22], "num_veh": [1, 2]})
+    vehicules = pd.DataFrame(
+        {"Num_Acc": [1, 2], "id_vehicule": [11, 22], "num_veh": [1, 2]}
+    )
     usagers = pd.DataFrame({"Num_Acc": [1, 2], "id_vehicule": [11, 22], "u": [5, 6]})
 
-    tables = {"caracteristiques": carac, "lieux": lieux, "vehicules": vehicules, "usagers": usagers}
+    tables = {
+        "caracteristiques": carac,
+        "lieux": lieux,
+        "vehicules": vehicules,
+        "usagers": usagers,
+    }
 
     out = preprocess.merge_tables(tables)
     # Should keep same number of usagers
@@ -68,7 +74,12 @@ def test_merge_tables_inconsistent_raises():
     vehicules = pd.DataFrame({"Num_Acc": [1, 1], "id_vehicule": [11, 11]})
     usagers = pd.DataFrame({"Num_Acc": [1], "id_vehicule": [11]})
 
-    tables = {"caracteristiques": carac, "lieux": lieux, "vehicules": vehicules, "usagers": usagers}
+    tables = {
+        "caracteristiques": carac,
+        "lieux": lieux,
+        "vehicules": vehicules,
+        "usagers": usagers,
+    }
 
     with pytest.raises(ValueError):
         preprocess.merge_tables(tables)
@@ -87,7 +98,9 @@ def test_build_target_filters_and_labels():
 
 
 def test_engineer_features_time():
-    df = pd.DataFrame({"an_nais": [1980, "notnum"], "an": [2020, 2020], "hrmn": ["12:34", "00:05"]})
+    df = pd.DataFrame(
+        {"an_nais": [1980, "notnum"], "an": [2020, 2020], "hrmn": ["12:34", "00:05"]}
+    )
     out = preprocess.engineer_features(df)
     # heure and minute derived from hrmn
     assert out.loc[0, "heure"] == "12"
@@ -97,13 +110,15 @@ def test_engineer_features_time():
 
 
 def test_build_feature_matrix_types_and_groups():
-    df = pd.DataFrame({
-        "Num_Acc": [1, 1],
-        "grave": [0, 1],
-        "age": [30, 40],
-        "heure": ["12", "13"],
-        "grav": ["0", "1"],
-    })
+    df = pd.DataFrame(
+        {
+            "Num_Acc": [1, 1],
+            "grave": [0, 1],
+            "age": [30, 40],
+            "heure": ["12", "13"],
+            "grav": ["0", "1"],
+        }
+    )
     X, y, groups = preprocess.build_feature_matrix(df)
     # y is grave
     assert list(y.values) == [0, 1]
@@ -117,6 +132,7 @@ def test_build_feature_matrix_types_and_groups():
 def test_split_train_test_no_overlap(monkeypatch):
     # Create df with two accidents each with two usagers
     df = pd.DataFrame({"Num_Acc": [1, 1, 2, 2], "grave": [0, 1, 0, 1]})
+
     # Force a simple splitter that keeps accidents together
     class SimpleSplitter:
         def __init__(self, n_splits, test_size, random_state):
@@ -154,10 +170,16 @@ def test_preprocess_all_uses_pipeline(monkeypatch, tmp_path):
     df_sample = pd.DataFrame({"Num_Acc": [1, 1], "grave": [0, 1]})
 
     monkeypatch.setattr(preprocess, "YEARS", [2022])
-    monkeypatch.setattr(preprocess, "load_year", lambda year: {"caracteristiques": pd.DataFrame({"Num_Acc": [1]}),
-                                                                   "lieux": pd.DataFrame({"Num_Acc": [1]}),
-                                                                   "vehicules": pd.DataFrame({"Num_Acc": [1], "id_vehicule": [1]}),
-                                                                   "usagers": pd.DataFrame({"Num_Acc": [1], "id_vehicule": [1]})})
+    monkeypatch.setattr(
+        preprocess,
+        "load_year",
+        lambda year: {
+            "caracteristiques": pd.DataFrame({"Num_Acc": [1]}),
+            "lieux": pd.DataFrame({"Num_Acc": [1]}),
+            "vehicules": pd.DataFrame({"Num_Acc": [1], "id_vehicule": [1]}),
+            "usagers": pd.DataFrame({"Num_Acc": [1], "id_vehicule": [1]}),
+        },
+    )
     monkeypatch.setattr(preprocess, "merge_tables", lambda tables: df_sample)
     monkeypatch.setattr(preprocess, "build_target", lambda df: df.assign(grave=[0, 1]))
     monkeypatch.setattr(preprocess, "engineer_features", lambda df: df)
@@ -180,7 +202,9 @@ def test_preprocess_all_uses_pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(pd.DataFrame, "to_parquet", fake_to_parquet)
 
     # Avoid running the real GroupShuffleSplit inside preprocess_all
-    monkeypatch.setattr(preprocess, "split_train_test", lambda full: (df_sample, df_sample))
+    monkeypatch.setattr(
+        preprocess, "split_train_test", lambda full: (df_sample, df_sample)
+    )
 
     train, test = preprocess.preprocess_all()
     assert isinstance(train, pd.DataFrame)

@@ -1,7 +1,6 @@
 """Placeholder tests — expand as you implement src/common and src/training."""
 
 import pandas as pd
-import pytest
 
 
 def test_dataframe_roundtrip(tmp_path):

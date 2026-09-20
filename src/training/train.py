@@ -1,6 +1,7 @@
 """
 Training of the accident severity model (XGBoost).
-Reads the preprocessed dataset (data/processed/) and performs a grouped split by accident.
+Reads the preprocessed dataset (data/processed/) and performs a grouped
+split by accident.
 Trains and saves the model to models/.
 
 Run via 'python -m src.training.train'.
@@ -10,17 +11,17 @@ import logging
 import os
 from pathlib import Path
 
-import pandas as pd
-
-from src.data.preprocess import build_feature_matrix
-
-from sklearn.model_selection import GroupShuffleSplit
-from xgboost import XGBClassifier
 import joblib
 import mlflow
 import mlflow.xgboost
+import pandas as pd
+from xgboost import XGBClassifier
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+from src.data.preprocess import build_feature_matrix
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 log = logging.getLogger(__name__)
 
 TRAIN_PATH = Path("data/processed/train.parquet")
@@ -38,7 +39,8 @@ VERSION_PATH = MODEL_DIR / "model_version.txt"  # read by promote.py
 
 # Hyperparameters retained after a GridSearchCV (scoring="roc_auc", 3-fold
 # StratifiedGroupKFold) over the full 2019-2024 dataset (595884 users).
-# Tested grid: max_depth=[3, 5, 7], learning_rate=[0.05, 0.1, 0.2], n_estimators=[50, 100, 200, 300].
+# Tested grid: max_depth=[3, 5, 7], learning_rate=[0.05, 0.1, 0.2],
+# n_estimators=[50, 100, 200, 300].
 # Best cross-validated AUC-ROC: 0.8723.
 #
 # Deeper trees with a slower learning rate replaced the previous shallow
@@ -104,9 +106,18 @@ def tune_hyperparameters(X_train, y_train, groups_train):
     cv = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
 
     grid = GridSearchCV(
-        XGBClassifier(scale_pos_weight=scale, enable_categorical=True, tree_method="hist",
-                      eval_metric="logloss", random_state=RANDOM_STATE),
-        param_grid, scoring="roc_auc", cv=cv, n_jobs=-1, verbose=2,
+        XGBClassifier(
+            scale_pos_weight=scale,
+            enable_categorical=True,
+            tree_method="hist",
+            eval_metric="logloss",
+            random_state=RANDOM_STATE,
+        ),
+        param_grid,
+        scoring="roc_auc",
+        cv=cv,
+        n_jobs=-1,
+        verbose=2,
     )
     grid.fit(X_train, y_train, groups=groups_train)
 
@@ -180,16 +191,20 @@ def log_mlflow_run(model, X_train) -> str:
         client = mlflow.MlflowClient()
         version = model_info.registered_model_version
         client.set_model_version_tag(
-            name=REGISTERED_MODEL_NAME, version=version,
-            key="decision_threshold", value=str(DECISION_THRESHOLD),
+            name=REGISTERED_MODEL_NAME,
+            version=version,
+            key="decision_threshold",
+            value=str(DECISION_THRESHOLD),
         )
 
         # Record which version this run produced so promote.py can find it.
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
         VERSION_PATH.write_text(str(version))
 
-        log.info(f"MLflow run {run.info.run_id}: registered {REGISTERED_MODEL_NAME} "
-                 f"v{version} (not promoted yet)")
+        log.info(
+            f"MLflow run {run.info.run_id}: registered {REGISTERED_MODEL_NAME} "
+            f"v{version} (not promoted yet)"
+        )
         return run.info.run_id
 
 

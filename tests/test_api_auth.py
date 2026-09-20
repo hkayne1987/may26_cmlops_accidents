@@ -2,7 +2,6 @@
 
 import os
 import sys
-from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -38,9 +37,13 @@ def client(monkeypatch):
     main_module.app.dependency_overrides[auth_module.get_session] = override_session
 
     with Session(engine) as session:
-        auth_module.create_user(session, "operator1", OPERATOR_PW, auth_module.Role.OPERATOR)
+        auth_module.create_user(
+            session, "operator1", OPERATOR_PW, auth_module.Role.OPERATOR
+        )
         auth_module.create_user(session, "admin1", ADMIN_PW, auth_module.Role.ADMIN)
-        auth_module.create_user(session, "airflow1", SERVICE_PW, auth_module.Role.SERVICE)
+        auth_module.create_user(
+            session, "airflow1", SERVICE_PW, auth_module.Role.SERVICE
+        )
 
     # Stub model: two classes, probability of the severe class above the
     # 0.35 threshold so the prediction is deterministic. predict_proba must
@@ -95,8 +98,12 @@ def test_login_wrong_password_is_rejected(client):
 
 def test_login_unknown_user_gives_same_error_as_wrong_password(client):
     """The message must not reveal whether the username exists."""
-    unknown = client.post("/token", data={"username": "ghost", "password": "whatever1234"})
-    wrong = client.post("/token", data={"username": "operator1", "password": "wrong-pass12"})
+    unknown = client.post(
+        "/token", data={"username": "ghost", "password": "whatever1234"}
+    )
+    wrong = client.post(
+        "/token", data={"username": "operator1", "password": "wrong-pass12"}
+    )
     assert unknown.status_code == wrong.status_code == 401
     assert unknown.json()["detail"] == wrong.json()["detail"]
 
@@ -148,7 +155,9 @@ def test_expired_token_is_rejected(client, monkeypatch):
 def test_token_signed_with_another_key_is_rejected(client):
     import jwt
 
-    forged = jwt.encode({"sub": "admin1", "role": "admin"}, "another-key", algorithm="HS256")
+    forged = jwt.encode(
+        {"sub": "admin1", "role": "admin"}, "another-key", algorithm="HS256"
+    )
     response = client.post(
         "/predict", json=FEATURES, headers={"Authorization": f"Bearer {forged}"}
     )
