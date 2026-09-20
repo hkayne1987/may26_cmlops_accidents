@@ -2,50 +2,83 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main]
 
+# A new push to the same branch makes the previous run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  quality:
+    name: Tests, types and lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install UV
         uses: astral-sh/setup-uv@v4
-        
+        with:
+          enable-cache: true
+
       - name: Set up Python
         run: uv python install 3.10
-        
-      - name: Install dependencies
-        run: uv sync
 
-      - name: Run tests
-        run: uv run pytest tests/ --cov=src
-        
-      - name: Type check
-        run: uv run mypy src/
-        
+      - name: Install dependencies
+        # --frozen: fail if uv.lock and pyproject.toml disagree, rather than
+        # silently resolving different versions than the ones we test against.
+        run: uv sync --frozen
+
       - name: Lint
-        run: uv run ruff check src/
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install UV
-        uses: astral-sh/setup-uv@v4
-        
-      - name: Set up Python
-        run: uv python install 3.10
-        
-      - name: Install dependencies
-        run: uv sync
+        run: uv run ruff check src/ tests/
 
       - name: Check formatting
-        run: uv run ruff format --check src/
-        
-      - name: Run ruff
-        run: uv run ruff check src/
+        run: uv run ruff format --check src/ tests/
+
+      - name: Type check
+        run: uv run mypy src/
+
+      - name: Run tests
+        # No JWT_SECRET_KEY needed: tests/test_api_auth.py sets its own before
+        # importing the app.
+        run: uv run pytest tests/ --cov=src --cov-report=term-missing
+
+  docker:
+    name: Build images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Built but not pushed here: publishing happens in release.yml once the
+      # change is on main. This job only proves the Dockerfiles still build.
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/api.Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build training image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/train.Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build DVC image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/dvc.Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
