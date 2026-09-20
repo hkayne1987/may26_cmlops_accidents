@@ -327,6 +327,44 @@ its own container. That is a privileged access: anything running in Airflow can
 control Docker on the host. Acceptable locally, to revisit before any real
 deployment.
 
+## CI/CD
+
+Two workflows, both in `.github/workflows/`.
+
+**`ci.yml`** runs on every pull request and every push to `main`:
+
+| Step | Command |
+|---|---|
+| Lint | `ruff check src/ tests/` |
+| Format | `ruff format --check src/ tests/` |
+| Types | `mypy src/` |
+| Tests | `pytest tests/ --cov=src` |
+| Images | builds the three Dockerfiles without pushing |
+
+**`release.yml`** runs once a change is merged to `main`, and publishes the
+three images to the GitHub Container Registry:
+
+```
+ghcr.io/hkayne1987/may26_cmlops_accidents/baac-api:latest
+ghcr.io/hkayne1987/may26_cmlops_accidents/baac-training:latest
+ghcr.io/hkayne1987/may26_cmlops_accidents/baac-dvc:latest
+```
+
+Each image is tagged twice: with the commit SHA, which pins a build for good,
+and with `latest`, which follows `main`. Pull one with:
+
+```bash
+docker pull ghcr.io/hkayne1987/may26_cmlops_accidents/baac-api:latest
+```
+
+GHCR rather than Docker Hub: the registry token is provided by GitHub itself
+(`secrets.GITHUB_TOKEN`), so there is no secret to create or rotate, and the
+images belong to the repository rather than to one member's personal account.
+Docker Hub organisations are a paid feature.
+
+Packages are private by default. Make them public from the repository's
+Packages page if the team wants to pull without authenticating.
+
 ## Project structure
 
 `src/data/`: Load, merge BAAC tables, build target, feature engineering and train/test split  
