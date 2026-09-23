@@ -25,7 +25,9 @@ from sklearn.metrics import (
 
 from src.data.preprocess import build_feature_matrix
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 log = logging.getLogger(__name__)
 
 # --- Configuration ------------------------------------------------------------
@@ -40,8 +42,10 @@ DECISION_THRESHOLD = 0.35
 
 def load_test() -> pd.DataFrame:
     if not TEST_PATH.exists():
-        raise FileNotFoundError(f"Test set not found: {TEST_PATH}. "
-                                f"Run `python -m src.data.preprocess` first.")
+        raise FileNotFoundError(
+            f"Test set not found: {TEST_PATH}. "
+            f"Run `python -m src.data.preprocess` first."
+        )
     df = pd.read_parquet(TEST_PATH)
     log.info(f"Test set loaded: {df.shape[0]} rows")
     return df
@@ -49,8 +53,9 @@ def load_test() -> pd.DataFrame:
 
 def load_model():
     if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Model not found: {MODEL_PATH}. "
-                                f"Run `python -m src.training.train` first.")
+        raise FileNotFoundError(
+            f"Model not found: {MODEL_PATH}. Run `python -m src.training.train` first."
+        )
     return joblib.load(MODEL_PATH)
 
 
@@ -60,8 +65,10 @@ def evaluate(model, X_test, y_test, threshold: float = DECISION_THRESHOLD) -> di
     y_pred = (y_proba >= threshold).astype(int)
 
     auc = roc_auc_score(y_test, y_proba)
-    log.info(f"\n=== Report (threshold = {threshold}) ===\n"
-             + classification_report(y_test, y_pred, target_names=["non severe", "severe"]))
+    log.info(
+        f"\n=== Report (threshold = {threshold}) ===\n"
+        + classification_report(y_test, y_pred, target_names=["non severe", "severe"])
+    )
     log.info(f"Confusion matrix:\n{confusion_matrix(y_test, y_pred)}")
     log.info(f"AUC-ROC: {auc:.3f}")
 
@@ -92,11 +99,19 @@ def threshold_search(model, X_test, y_test):
         p = precision_score(y_test, y_pred)
         f = f1_score(y_test, y_pred)
         f2 = fbeta_score(y_test, y_pred, beta=2)
-        log.info(f"threshold={t:.2f} | recall={r:.3f} | precision={p:.3f} "
-                 f"| f1={f:.3f} | f2={f2:.3f}")
-        rows.append({"threshold": t, "recall": round(r, 4),
-                     "precision": round(p, 4), "f1": round(f, 4),
-                     "f2": round(f2, 4)})
+        log.info(
+            f"threshold={t:.2f} | recall={r:.3f} | precision={p:.3f} "
+            f"| f1={f:.3f} | f2={f2:.3f}"
+        )
+        rows.append(
+            {
+                "threshold": t,
+                "recall": round(r, 4),
+                "precision": round(p, 4),
+                "f1": round(f, 4),
+                "f2": round(f2, 4),
+            }
+        )
     return rows
 
 
@@ -123,5 +138,7 @@ if __name__ == "__main__":
             )
         log.info(f"Metrics and threshold scan logged to MLflow run {run_id}")
     else:
-        log.warning(f"{RUN_ID_PATH} not found: skipping MLflow logging "
-                    f"(run `python -m src.training.train` first)")
+        log.warning(
+            f"{RUN_ID_PATH} not found: skipping MLflow logging "
+            f"(run `python -m src.training.train` first)"
+        )

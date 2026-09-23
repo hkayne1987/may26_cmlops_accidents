@@ -38,6 +38,11 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
+# X_train, X_test and X are the scikit-learn convention for feature matrices
+# (uppercase for a 2D matrix, lowercase for a 1D vector). Renaming them to
+# satisfy pep8-naming would make the code harder to read for anyone used to
+# the ML ecosystem.
+ignore = ["N803", "N806"]
 
 [tool.mypy]
 ignore_missing_imports = true

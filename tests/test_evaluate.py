@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import training.evaluate as evaluate_module
+import src.training.evaluate as evaluate_module
 
 
 def test_load_test_missing_file(monkeypatch):
@@ -37,7 +37,9 @@ def test_load_test_reads_parquet(monkeypatch):
     monkeypatch.setattr(evaluate_module, "TEST_PATH", fake_path)
 
     expected = pd.DataFrame({"a": [1, 2], "b": [3, 4], "target": [0, 1]})
-    monkeypatch.setattr(evaluate_module.pd, "read_parquet", MagicMock(return_value=expected))
+    monkeypatch.setattr(
+        evaluate_module.pd, "read_parquet", MagicMock(return_value=expected)
+    )
 
     result = evaluate_module.load_test()
     pd.testing.assert_frame_equal(result, expected)
@@ -49,7 +51,9 @@ def test_load_model_loads_joblib(monkeypatch):
     monkeypatch.setattr(evaluate_module, "MODEL_PATH", fake_path)
 
     expected_model = MagicMock()
-    monkeypatch.setattr(evaluate_module.joblib, "load", MagicMock(return_value=expected_model))
+    monkeypatch.setattr(
+        evaluate_module.joblib, "load", MagicMock(return_value=expected_model)
+    )
 
     model = evaluate_module.load_model()
     assert model is expected_model
@@ -57,12 +61,14 @@ def test_load_model_loads_joblib(monkeypatch):
 
 def test_evaluate_metrics_for_threshold():
     model = MagicMock()
-    model.predict_proba.return_value = np.array([
-        [0.1, 0.9],
-        [0.8, 0.2],
-        [0.4, 0.6],
-        [0.3, 0.7],
-    ])
+    model.predict_proba.return_value = np.array(
+        [
+            [0.1, 0.9],
+            [0.8, 0.2],
+            [0.4, 0.6],
+            [0.3, 0.7],
+        ]
+    )
 
     X_test = pd.DataFrame({"a": [1, 2, 3, 4]})
     y_test = pd.Series([1, 0, 1, 1])
@@ -78,12 +84,14 @@ def test_evaluate_metrics_for_threshold():
 
 def test_threshold_search_returns_reliable_rows():
     model = MagicMock()
-    model.predict_proba.return_value = np.array([
-        [0.1, 0.9],
-        [0.8, 0.2],
-        [0.4, 0.6],
-        [0.3, 0.7],
-    ])
+    model.predict_proba.return_value = np.array(
+        [
+            [0.1, 0.9],
+            [0.8, 0.2],
+            [0.4, 0.6],
+            [0.3, 0.7],
+        ]
+    )
 
     X_test = pd.DataFrame({"a": [1, 2, 3, 4]})
     y_test = pd.Series([1, 0, 1, 1])

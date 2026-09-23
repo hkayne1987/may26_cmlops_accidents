@@ -78,14 +78,18 @@ def load_model_from_registry() -> tuple[Any, str]:
 
     # Resolve the concrete version behind the alias for traceability.
     try:
-        version = str(mlflow.MlflowClient().get_model_version_by_alias(
-            REGISTERED_MODEL_NAME, PRODUCTION_ALIAS
-        ).version)
+        version = str(
+            mlflow.MlflowClient()
+            .get_model_version_by_alias(REGISTERED_MODEL_NAME, PRODUCTION_ALIAS)
+            .version
+        )
     except Exception:
         version = "unknown"
 
-    log.info(f"Model pulled from registry: {MODEL_URI} (v{version}) "
-             f"in {time.time() - start:.1f}s")
+    log.info(
+        f"Model pulled from registry: {MODEL_URI} (v{version}) "
+        f"in {time.time() - start:.1f}s"
+    )
     return loaded, version
 
 
@@ -119,8 +123,10 @@ def load_model(attempts: int = 3, backoff: float = 5.0) -> tuple[Any, str]:
                 return loaded, version
             break  # tracking URI unset: no point retrying
         except Exception as e:
-            log.warning(f"Registry pull failed (attempt {attempt}/{attempts}, "
-                        f"{type(e).__name__}: {e})")
+            log.warning(
+                f"Registry pull failed (attempt {attempt}/{attempts}, "
+                f"{type(e).__name__}: {e})"
+            )
             if attempt < attempts:
                 time.sleep(backoff)
 
@@ -225,7 +231,7 @@ async def login(
 @app.get("/me", response_model=UserInfo, tags=["auth"])
 async def read_current_user(user: User = Depends(get_current_user)):
     """Returns the account behind the current token."""
-    return UserInfo(username=user.username, role=user.role, is_active=user.is_active)
+    return UserInfo.from_user(user)
 
 
 @app.post("/predict", response_model=PredictResponse, tags=["inference"])
@@ -249,8 +255,7 @@ async def predict(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
-                f"Expected {n_features_expected} features, "
-                f"got {len(request.features)}"
+                f"Expected {n_features_expected} features, got {len(request.features)}"
             ),
         )
 
@@ -297,7 +302,7 @@ async def add_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     log.info(f"{admin.username} created account {user.username}")
-    return UserInfo(username=user.username, role=user.role, is_active=user.is_active)
+    return UserInfo.from_user(user)
 
 
 @app.post("/admin/reload-model", response_model=HealthResponse, tags=["admin"])
@@ -311,9 +316,7 @@ async def reload_model(
     """
     previous = model_version
     refresh_model()
-    log.info(
-        f"{caller.username} reloaded the model: v{previous} -> v{model_version}"
-    )
+    log.info(f"{caller.username} reloaded the model: v{previous} -> v{model_version}")
     return HealthResponse(
         status="healthy",
         model_loaded=model is not None,
@@ -328,10 +331,7 @@ async def list_users(
 ):
     """Lists all accounts. Admin only."""
     users = session.scalars(select(User).order_by(User.username)).all()
-    return [
-        UserInfo(username=u.username, role=u.role, is_active=u.is_active)
-        for u in users
-    ]
+    return [UserInfo.from_user(u) for u in users]
 
 
 @app.delete("/admin/users/{username}", response_model=UserInfo, tags=["admin"])
@@ -359,7 +359,7 @@ async def deactivate_user(
     user.is_active = False
     session.commit()
     log.info(f"{admin.username} deactivated account {username}")
-    return UserInfo(username=user.username, role=user.role, is_active=user.is_active)
+    return UserInfo.from_user(user)
 
 
 # @app.get("/predict/batch")

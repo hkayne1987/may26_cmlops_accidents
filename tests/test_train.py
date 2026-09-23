@@ -8,14 +8,14 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Provide a fake xgboost module when it is not installed.
 xgboost_module = types.ModuleType("xgboost")
 xgboost_module.XGBClassifier = MagicMock()
 sys.modules.setdefault("xgboost", xgboost_module)
 
-import training.train as train_module
+import src.training.train as train_module  # noqa: E402
 
 
 def test_load_train_missing_file(monkeypatch):
