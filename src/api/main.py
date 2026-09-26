@@ -14,15 +14,15 @@ from typing import Any
 import joblib
 import mlflow
 import numpy as np
-from fastapi import Depends, FastAPI, HTTPException, status
-
-# Kept for the /metrics endpoint at the bottom of this file, still commented out.
-from fastapi.responses import Response  # noqa: F401
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordRequestForm
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.api import metrics
 from src.api.auth import (
     Role,
     TokenResponse,
@@ -142,7 +142,11 @@ def refresh_model() -> None:
     """
     global model, model_version, n_features_expected
 
+    start = time.time()
     model, model_version = load_model()
+    metrics.MODEL_LOAD_SECONDS.set(time.time() - start)
+    metrics.set_served_model(model_version, loaded=model is not None)
+
     if model is None:
         log.warning("No model available from registry or local file")
         n_features_expected = None
@@ -167,6 +171,24 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def record_http_metrics(request: Request, call_next):
+    """Counts every request and times it, labelled by route template."""
+    start = time.time()
+    response = await call_next(request)
+
+    # The matched route is only known once routing ran. Unmatched paths share
+    # one label so random URLs cannot create new time series.
+    route = request.scope.get("route")
+    path = getattr(route, "path", "unmatched")
+    if path != "/metrics":  # Prometheus scraping itself is not traffic
+        metrics.HTTP_REQUESTS.labels(
+            request.method, path, str(response.status_code)
+        ).inc()
+        metrics.HTTP_LATENCY.labels(request.method, path).observe(time.time() - start)
+    return response
 
 
 # Request/Response models
@@ -216,6 +238,7 @@ async def login(
     if user is None:
         # Same message whether the user is unknown, disabled or the password
         # is wrong: do not tell an attacker which usernames exist.
+        metrics.LOGIN_ATTEMPTS.labels(result="failure").inc()
         log.warning(f"Failed login attempt for {form_data.username!r}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -224,6 +247,7 @@ async def login(
         )
 
     token, expires_in = create_access_token(user.username, user.role)
+    metrics.LOGIN_ATTEMPTS.labels(result="success").inc()
     log.info(f"Token issued to {user.username} (role={user.role})")
     return TokenResponse(access_token=token, expires_in=expires_in)
 
@@ -241,8 +265,6 @@ async def predict(
 ):
     """Makes a prediction using the loaded model. Requires a valid token."""
     global model
-
-    # INFERENCE_REQUESTS.inc()
 
     if model is None:
         raise HTTPException(
@@ -268,10 +290,14 @@ async def predict(
         if hasattr(model, "predict_proba"):
             probs = model.predict_proba(x)[0].tolist()
             pred = int(probs[1] >= DECISION_THRESHOLD)
+            metrics.SEVERE_PROBABILITY.observe(probs[1])
         else:
             pred = model.predict(x)[0]
 
-        # PREDICTIONS_MADE.inc()
+        metrics.PREDICTIONS.labels(
+            outcome="severe" if pred == 1 else "non_severe",
+            model_version=model_version,
+        ).inc()
         log.info(f"Prediction by {user.username}: {pred} (model v{model_version})")
         return PredictResponse(
             prediction=pred,
@@ -316,6 +342,9 @@ async def reload_model(
     """
     previous = model_version
     refresh_model()
+    metrics.MODEL_RELOADS.labels(
+        result="success" if model is not None else "no_model"
+    ).inc()
     log.info(f"{caller.username} reloaded the model: v{previous} -> v{model_version}")
     return HealthResponse(
         status="healthy",
@@ -387,10 +416,15 @@ async def deactivate_user(
 #         raise HTTPException(status_code=400, detail=str(e))
 
 
-# @app.get("/metrics")
-# async def metrics():
-#     """Prometheus metrics endpoint."""
-#     return Response(content=generate_latest(), media_type="text/plain")
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics():
+    """Prometheus scrape endpoint.
+
+    Unauthenticated because Prometheus scrapes it from inside the Docker
+    network. It must not be exposed publicly: the reverse proxy should not
+    forward /metrics.
+    """
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 if __name__ == "__main__":

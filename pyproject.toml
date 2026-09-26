@@ -20,6 +20,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "python-multipart>=0.0.32",
     "sqlalchemy>=2.0.0",
+    "prometheus-client>=0.26.0",
 ]
 
 [tool.uv]
