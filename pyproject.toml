@@ -1,7 +1,7 @@
 [project]
 name = "mlops-project-template"
 version = "0.1.0"
-description = "MLOps project template with UV workspaces"
+description = "Road accident severity prediction (BAAC): training pipeline and inference API"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -20,6 +20,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "python-multipart>=0.0.32",
     "sqlalchemy>=2.0.0",
+    "prometheus-client>=0.26.0",
 ]
 
 [tool.uv]

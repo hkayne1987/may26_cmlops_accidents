@@ -150,9 +150,8 @@ docker-compose --profile training run --rm training \
 This publishes a new model version, moves the `production` alias to it, and the
 API serves it after a `docker-compose restart api`.
 
-Prometheus and Grafana sit behind a `monitoring` profile
-(`docker-compose --profile monitoring up -d`). They are not wired up yet: the
-API's `/metrics` endpoint is still commented out.
+Prometheus and Grafana sit behind a `monitoring` profile, see
+[Monitoring](#monitoring).
 
 ## API
 Run the API
@@ -179,6 +178,7 @@ Endpoints:
 | `POST /admin/users` | admin | Creates an account |
 | `GET /admin/users` | admin | Lists accounts |
 | `DELETE /admin/users/{username}` | admin | Disables an account |
+| `GET /metrics` | internal (Prometheus) | Metrics in Prometheus format, see [Monitoring](#monitoring) |
 
 `/health` stays public so Docker and the reverse proxy can probe it; every
 other endpoint except `/token` requires a token (see
@@ -364,6 +364,41 @@ Docker Hub organisations are a paid feature.
 
 Packages are private by default. Make them public from the repository's
 Packages page if the team wants to pull without authenticating.
+
+## Monitoring
+
+The API exposes Prometheus metrics on `/metrics`. Prometheus scrapes it over
+the Docker network, and Grafana shows them on a provisioned dashboard.
+
+```bash
+docker-compose up -d api
+docker-compose --profile monitoring up -d
+```
+
+| Service | URL | Login |
+|---|---|---|
+| Prometheus | http://localhost:9090 | none |
+| Grafana | http://localhost:3000/d/baac-api | `admin` / `GRAFANA_PASSWORD` from `.env` |
+
+The data source and the **BAAC severity API** dashboard are provisioned from
+`deployment/grafana/`, so there is nothing to set up by hand. UI edits are
+kept until Grafana restarts: export the JSON and commit it to keep them.
+
+| Metric | What it tells you |
+|---|---|
+| `api_http_requests_total`, `api_http_request_duration_seconds` | traffic, errors and latency per route |
+| `api_model_version_info`, `api_model_loaded` | which model version is served, and whether one is loaded at all |
+| `api_model_load_duration_seconds`, `api_model_reloads_total` | how long the last load took, and reloads triggered by Airflow |
+| `api_predictions_total` | predictions by outcome (`severe` / `non_severe`) and model version |
+| `api_prediction_severe_probability` | distribution of the severe-class probability, often the first visible sign of drift |
+| `api_login_attempts_total` | login successes and failures, to spot password guessing |
+
+Routes are labelled by template (`/admin/users/{username}`), never by raw path,
+so the number of time series stays bounded.
+
+`/metrics` is unauthenticated because only Prometheus reads it, from inside
+the Docker network. **It must not be exposed publicly**: the reverse proxy
+should not forward it.
 
 ## Project structure
 

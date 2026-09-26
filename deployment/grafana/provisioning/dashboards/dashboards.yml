@@ -1,0 +1,12 @@
+# Loads every dashboard JSON file from this folder at Grafana startup.
+apiVersion: 1
+
+providers:
+  - name: baac
+    folder: BAAC
+    type: file
+    # Edits made in the UI are kept until restart; the JSON in Git stays the
+    # source of truth, so export and commit any change worth keeping.
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
