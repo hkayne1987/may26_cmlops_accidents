@@ -110,9 +110,12 @@ services:
     profiles:
       - airflow
 
-  # Prometheus monitoring (Phase 4)
+  # Prometheus monitoring (Phase 4). Scrapes the API's /metrics over the
+  # Docker network, see deployment/prometheus/prometheus.yml.
+  # Usage: docker-compose --profile monitoring up -d   -> http://localhost:9090
   prometheus:
-    image: prom/prometheus:latest
+    # Pinned rather than latest, like every other image in this stack.
+    image: prom/prometheus:v3.13.2
     ports:
       - "9090:9090"
     volumes:
@@ -124,9 +127,11 @@ services:
     profiles:
       - monitoring
 
-  # Grafana visualization (Phase 4)
+  # Grafana visualization (Phase 4). The Prometheus data source and the API
+  # dashboard are provisioned from deployment/grafana/, nothing to click.
+  # -> http://localhost:3000 (admin / GRAFANA_PASSWORD)
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.2.2
     ports:
       - "3000:3000"
     volumes:
