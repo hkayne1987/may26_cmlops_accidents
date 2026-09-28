@@ -396,6 +396,7 @@ docker-compose --profile monitoring up -d
 |---|---|---|
 | Prometheus | http://localhost:9090 | none |
 | Grafana | http://localhost:3000/d/baac-api | `admin` / `GRAFANA_PASSWORD` from `.env` |
+| Pushgateway | http://localhost:9091 | none |
 
 The data source and the **BAAC severity API** dashboard are provisioned from
 `deployment/grafana/`, so there is nothing to set up by hand. UI edits are
@@ -416,6 +417,58 @@ so the number of time series stays bounded.
 `/metrics` is unauthenticated because only Prometheus reads it, from inside
 the Docker network. **It must not be exposed publicly**: the reverse proxy
 should not forward it.
+
+### Data drift
+
+Whether an accident really was severe is only known once a year, with the
+next BAAC release. Until then, the only early sign that the model may be
+degrading is a change in what operators send it. That is what drift
+detection watches.
+
+1. Every call to `/predict` is logged with the real values received, in
+   `data/predictions.db` (gitignored, mounted from the host).
+2. `src/monitoring/detection.py` compares the last 7 days of requests with a
+   sample of the training data, using [Evidently](https://www.evidentlyai.com/).
+3. It writes an HTML report to `reports/drift/drift_report_latest.html` and
+   pushes the result to the Pushgateway, so it shows in the **Data drift** row
+   of the Grafana dashboard.
+4. Airflow runs it daily (`drift_monitoring` DAG). It is safe to schedule: it
+   only measures and never touches the served model.
+
+The alert fires when **25% of the compared columns** drift, the same
+threshold in Grafana and in the Evidently report. `com` (24k communes, too
+sparse to test) and `an` (the year always moves forward) are left out, and a
+column empty in the window is skipped. Thresholds and window can be tuned
+from `.env`, see `env.example`.
+
+**A drift alert does not retrain the model.** Retraining needs new labelled
+data, and retraining on the same data would give the same model. The decision
+process is:
+
+| Signal | When | Response |
+|---|---|---|
+| Drift in the requests | any day | alert in Grafana, a human looks at what changed |
+| New BAAC year versioned with DVC | once a year | run `ml_pipeline`; `promote` only releases a model that clears the metric gate |
+| Manual decision | any time | run `ml_pipeline` by hand |
+
+#### Trying it out
+
+The API gets no real traffic in this project, so `make replay` sends real
+accidents from the test set through it, like operators would. A scenario other
+than `normal` restricts them to one kind of accident, making the inputs drift
+on purpose:
+
+```bash
+docker-compose up -d api
+docker-compose --profile monitoring up -d
+
+make replay SCENARIO=normal ROWS=500     # ordinary accidents
+make drift                               # -> no drift
+make replay SCENARIO=motorway ROWS=500   # now half the week is motorways
+make drift                               # -> alert, ~40% of columns drifted
+```
+
+Scenarios: `normal`, `motorway`, `pedestrians`, `night`, `two_wheelers`.
 
 ## Project structure
 

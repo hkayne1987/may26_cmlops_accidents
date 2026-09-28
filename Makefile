@@ -1,4 +1,4 @@
-.PHONY: install test lint format clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate mlflow-ui-local users
+.PHONY: install test lint format clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate mlflow-ui-local users replay drift
 
 help:
 	@echo "Available targets:"
@@ -10,6 +10,8 @@ help:
 	@echo "  make evaluate          - evaluate the model on the test set"
 	@echo "  make mlflow-ui-local   - open the local MLflow UI (./mlruns); remote tracking runs on DagsHub"
 	@echo "  make users ARGS=...    - manage API accounts, e.g. ARGS=\"create alice --role admin\""
+	@echo "  make replay            - send real accidents to the API, e.g. SCENARIO=motorway ROWS=500"
+	@echo "  make drift             - compare logged predictions with the training data (Evidently)"
 
 install:
 	uv sync
@@ -70,3 +72,17 @@ preprocess-train-evaluate:
 	uv run python -m src.data.preprocess && \
 	uv run python -m src.training.train && \
 	uv run python -m src.training.evaluate
+# Drift detection demo. The API gets no real traffic, so replay real BAAC
+# accidents through it; a scenario other than "normal" makes the inputs drift.
+# Scenarios: normal, motorway, pedestrians, night, two_wheelers.
+# Needs API_USERNAME / API_PASSWORD, read from .env.
+SCENARIO ?= normal
+ROWS ?= 500
+replay:
+	set -a; . ./.env; set +a; \
+	uv run python -m src.monitoring.replay --scenario $(SCENARIO) --rows $(ROWS)
+
+# Same job as the daily Airflow DAG. Needs the monitoring profile up so the
+# result reaches the Pushgateway.
+drift:
+	docker-compose --profile drift run --rm drift
