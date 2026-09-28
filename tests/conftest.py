@@ -5,7 +5,13 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from tests.api_helpers import ADMIN_PW, OPERATOR_PW, SERVICE_PW
+from tests.api_helpers import (
+    ADMIN_PW,
+    OPERATOR_PW,
+    SERVICE_PW,
+    STUB_CATEGORIES,
+    STUB_NAMES,
+)
 
 
 @pytest.fixture
@@ -17,6 +23,7 @@ def client(monkeypatch):
 
     from src.api import auth as auth_module
     from src.api import main as main_module
+    from src.api.schema import FeatureSchema
 
     engine = auth_module.get_engine(":memory:")
 
@@ -40,11 +47,16 @@ def client(monkeypatch):
     # return a numpy array, since the endpoint calls .tolist() on the row.
     model = MagicMock()
     model.predict_proba.return_value = np.array([[0.2, 0.8]])
-    model.n_features_in_ = 40
 
     # lifespan would otherwise pull the real model from MLflow and overwrite
     # the stub, so stub the loader itself rather than the module globals.
+    # A stub has no XGBoost booster to read a schema from, so give it one.
     monkeypatch.setattr(main_module, "load_model", lambda: (model, "test"))
+    monkeypatch.setattr(
+        main_module,
+        "schema_from_model",
+        lambda m: FeatureSchema(names=STUB_NAMES, categories=STUB_CATEGORIES),
+    )
 
     with TestClient(main_module.app, raise_server_exceptions=False) as c:
         yield c
