@@ -73,6 +73,8 @@ airflow_data/
 
 # API user accounts: contains password hashes, never commit
 data/api_users.db
+# Prediction log for drift detection: operators' requests, never commit
+data/predictions.db
 
 
 # Keep the variable description PDF despite the *.pdf rule above

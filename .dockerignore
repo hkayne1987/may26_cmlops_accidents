@@ -8,6 +8,8 @@
 # API user accounts (password hashes): mounted as a volume at run time,
 # it must never end up baked into an image.
 data/api_users.db
+# Prediction log (operators' requests), mounted the same way.
+data/predictions.db
 
 # Version control and local virtualenv (the image runs uv sync itself)
 .git/

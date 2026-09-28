@@ -15,7 +15,17 @@ from tests.api_helpers import (
 
 
 @pytest.fixture
-def client(monkeypatch):
+def prediction_db(monkeypatch, tmp_path):
+    """Points the prediction log at a throwaway database for the test."""
+    from src.api import prediction_log
+
+    engine = prediction_log.get_engine(str(tmp_path / "predictions.db"))
+    monkeypatch.setattr(prediction_log, "_engine", engine)
+    return engine
+
+
+@pytest.fixture
+def client(monkeypatch, prediction_db):
     """API client backed by an in-memory database and a stub model."""
     # Imported here so only the tests that use the API pay for loading it.
     from fastapi.testclient import TestClient

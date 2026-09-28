@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.api import metrics
+from src.api import metrics, prediction_log
 from src.api.auth import (
     Role,
     TokenResponse,
@@ -346,6 +346,20 @@ async def predict(
             model_version=model_version,
         ).inc()
         log.info(f"Prediction by {user.username}: {pred} (model v{model_version})")
+
+        # Feed drift detection. A logging failure must never cost an operator
+        # their answer, so it is counted and logged but not raised.
+        try:
+            prediction_log.record_prediction(
+                features=request.features,
+                severe_probability=probs[1] if probs else float(pred),
+                prediction=int(pred),
+                model_version=model_version,
+                username=user.username,
+            )
+        except Exception:
+            metrics.PREDICTION_LOG_FAILURES.inc()
+            log.exception("Could not write the prediction to the drift log")
         return PredictResponse(
             prediction=pred,
             probabilities=probs,
