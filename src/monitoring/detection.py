@@ -121,10 +121,7 @@ def _align(
     def typed(frame: pd.DataFrame) -> pd.DataFrame:
         out = pd.DataFrame(index=frame.index)
         for c in categorical:
-            values = frame[c].astype(object)
-            out[c] = values.where(values.notna(), None).map(
-                lambda v: None if v is None else str(v)
-            )
+            out[c] = [None if pd.isna(v) else str(v) for v in frame[c].astype(object)]
         for c in numerical:
             out[c] = pd.to_numeric(frame[c], errors="coerce").astype(float)
         return out
