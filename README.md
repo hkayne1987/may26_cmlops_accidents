@@ -13,7 +13,9 @@ deployment, monitoring) rather than on modeling performance.
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.10, pinned in `.python-version` to match the CI and the Docker
+  images. uv picks it up on its own (and downloads it if needed): after a
+  `git pull`, `uv sync` recreates `.venv` if it was built on another version.
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - Docker (optional, to run the containerized services)
 
