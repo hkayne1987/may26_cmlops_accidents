@@ -1,6 +1,0 @@
-# Default Drift Detection Settings
-threshold: 0.5
-include_columns: []  # Empty means all columns
-exclude_columns: []  # Columns to exclude from drift detection
-categorical_columns: []
-numerical_columns: []

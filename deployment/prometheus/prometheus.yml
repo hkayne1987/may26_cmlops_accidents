@@ -12,6 +12,13 @@ scrape_configs:
       - targets: ['api:8000']
     metrics_path: '/metrics'
 
+  # Results left by batch jobs (drift detection). honor_labels keeps the job
+  # label the job pushed ("drift_detection") instead of "pushgateway".
+  - job_name: 'pushgateway'
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway:9091']
+
   # Scrape Prometheus itself
   - job_name: 'prometheus'
     static_configs:

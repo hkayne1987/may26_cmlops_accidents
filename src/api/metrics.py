@@ -63,6 +63,11 @@ MODEL_RELOADS = Counter(
     ["result"],
 )
 
+PREDICTION_LOG_FAILURES = Counter(
+    "api_prediction_log_failures_total",
+    "Predictions served but not written to the drift log.",
+)
+
 LOGIN_ATTEMPTS = Counter(
     "api_login_attempts_total",
     "Login attempts on /token, by result.",

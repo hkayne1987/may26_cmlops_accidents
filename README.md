@@ -13,7 +13,9 @@ deployment, monitoring) rather than on modeling performance.
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.10, pinned in `.python-version` to match the CI and the Docker
+  images. uv picks it up on its own (and downloads it if needed): after a
+  `git pull`, `uv sync` recreates `.venv` if it was built on another version.
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - Docker (optional, to run the containerized services)
 
@@ -174,6 +176,7 @@ Endpoints:
 | `POST /token` | public | Exchanges username and password for an access token |
 | `GET /me` | any logged-in user | Returns the account behind the current token |
 | `POST /predict` | operator, service, admin | Runs inference |
+| `GET /model/schema` | operator, service, admin | Lists the columns `/predict` expects and the values each accepts |
 | `POST /admin/reload-model` | service, admin | Reloads the production model without a restart |
 | `POST /admin/users` | admin | Creates an account |
 | `GET /admin/users` | admin | Lists accounts |
@@ -184,24 +187,50 @@ Endpoints:
 other endpoint except `/token` requires a token (see
 [Authentication](#authentication)).
 
-Request Body:
-The request must contain a list of feature values in the same order used during model training.
+### Request format
 
-Example Request
-```bash
+`/predict` takes the **real BAAC values**, keyed by column name, as they
+appear in the data.gouv.fr files: `"catv": "7"` for a car, `"lum": "1"` for
+daylight. Categorical codes may be sent as strings or numbers, and `null`
+means unknown. Column order does not matter.
+
+The API converts these values to the model's internal encoding itself:
+XGBoost stores the categories it saw in training inside the model, so the
+mapping always matches the version being served and follows each retrain.
+
+Example, a real severe accident from the test set (a driver in a car on an
+80 km/h road in Haute-Corse, in daylight):
+
+```json
 {
-  "features": [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  "features": {
+    "place": "1", "catu": "1", "sexe": "2", "secu1": "1", "secu2": "-1",
+    "secu3": "-1", "locp": "0", "actp": "0", "etatp": "-1", "senc": "2",
+    "catv": "7", "obs": "2", "obsm": "0", "choc": "3", "manv": "13",
+    "occutc": null, "jour": 19, "mois": 6, "an": 2023, "lum": "1",
+    "dep": "2B", "com": "2B193", "agg": "1", "int": "1", "atm": "1",
+    "col": "6", "lat": 42.37663, "long": 9.18949, "catr": "2", "circ": "2",
+    "nbv": 2, "vosp": "0", "prof": "1", "plan": "3", "surf": "1",
+    "infra": "0", "situ": "3", "vma": 80, "heure": 16, "minute": 57
+  }
 }
 ```
 
-Example Response
-```bash
+Response:
+
+```json
 {
-  "prediction": 0,
-  "probabilities": [0.8578826785087585, 0.14211730659008026],
+  "prediction": 1,
+  "probabilities": [0.22261929512023926, 0.7773807048797607],
   "model_version": "6"
 }
 ```
+
+A request that does not match the model is refused with a 422 listing every
+problem at once: missing or unknown columns, non-numeric values, and category
+values never seen in training (with the accepted ones). `GET /model/schema`
+lists the 40 expected columns and their allowed values; the column meanings
+are in the variable description PDF in `docs/`.
 `model_version` is the MLflow registry version currently served, or `"local"`
 when the API fell back to the on-disk model.
 
@@ -253,18 +282,8 @@ account on every request, so a revoked operator cannot keep working with a
 token issued moments earlier.
 
 Swagger UI at `/docs` has an **Authorize** button that performs the same login.
-
-Important: `features` must list the 40 values in the exact order the model
-expects. The authoritative order is the one carried by the served model itself
-(`model.get_booster().feature_names`); `models/feature_columns.json` records the
-same order and is the easiest way to read it:
-
-```bash
-uv run python -c "import json; print(json.load(open('models/feature_columns.json')))"
-```
-
-Both come from the same training run, so they match — but if you ever retrain
-without committing the updated schema, trust the served model over the file.
+Once authorized, `GET /model/schema` shows what `/predict` expects, see
+[Request format](#request-format).
 
 ## Orchestration (Airflow)
 
@@ -379,6 +398,7 @@ docker-compose --profile monitoring up -d
 |---|---|---|
 | Prometheus | http://localhost:9090 | none |
 | Grafana | http://localhost:3000/d/baac-api | `admin` / `GRAFANA_PASSWORD` from `.env` |
+| Pushgateway | http://localhost:9091 | none |
 
 The data source and the **BAAC severity API** dashboard are provisioned from
 `deployment/grafana/`, so there is nothing to set up by hand. UI edits are
@@ -399,6 +419,58 @@ so the number of time series stays bounded.
 `/metrics` is unauthenticated because only Prometheus reads it, from inside
 the Docker network. **It must not be exposed publicly**: the reverse proxy
 should not forward it.
+
+### Data drift
+
+Whether an accident really was severe is only known once a year, with the
+next BAAC release. Until then, the only early sign that the model may be
+degrading is a change in what operators send it. That is what drift
+detection watches.
+
+1. Every call to `/predict` is logged with the real values received, in
+   `data/predictions.db` (gitignored, mounted from the host).
+2. `src/monitoring/detection.py` compares the last 7 days of requests with a
+   sample of the training data, using [Evidently](https://www.evidentlyai.com/).
+3. It writes an HTML report to `reports/drift/drift_report_latest.html` and
+   pushes the result to the Pushgateway, so it shows in the **Data drift** row
+   of the Grafana dashboard.
+4. Airflow runs it daily (`drift_monitoring` DAG). It is safe to schedule: it
+   only measures and never touches the served model.
+
+The alert fires when **25% of the compared columns** drift, the same
+threshold in Grafana and in the Evidently report. `com` (24k communes, too
+sparse to test) and `an` (the year always moves forward) are left out, and a
+column empty in the window is skipped. Thresholds and window can be tuned
+from `.env`, see `env.example`.
+
+**A drift alert does not retrain the model.** Retraining needs new labelled
+data, and retraining on the same data would give the same model. The decision
+process is:
+
+| Signal | When | Response |
+|---|---|---|
+| Drift in the requests | any day | alert in Grafana, a human looks at what changed |
+| New BAAC year versioned with DVC | once a year | run `ml_pipeline`; `promote` only releases a model that clears the metric gate |
+| Manual decision | any time | run `ml_pipeline` by hand |
+
+#### Trying it out
+
+The API gets no real traffic in this project, so `make replay` sends real
+accidents from the test set through it, like operators would. A scenario other
+than `normal` restricts them to one kind of accident, making the inputs drift
+on purpose:
+
+```bash
+docker-compose up -d api
+docker-compose --profile monitoring up -d
+
+make replay SCENARIO=normal ROWS=500     # ordinary accidents
+make drift                               # -> no drift
+make replay SCENARIO=motorway ROWS=500   # now half the week is motorways
+make drift                               # -> alert, ~40% of columns drifted
+```
+
+Scenarios: `normal`, `motorway`, `pedestrians`, `night`, `two_wheelers`.
 
 ## Project structure
 

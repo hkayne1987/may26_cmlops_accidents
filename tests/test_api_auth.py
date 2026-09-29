@@ -213,14 +213,61 @@ def test_me_returns_the_caller(client):
 # --- Input validation ---------------------------------------------------
 
 
-def test_wrong_feature_count_is_rejected(client):
+def test_unknown_category_value_is_rejected(client):
+    """A value the model never saw must be refused, not silently mispredicted."""
     response = client.post(
         "/predict",
-        json={"features": [0.0] * 10},
+        json={"features": {"catv": "999", "lum": "1", "vma": 80}},
         headers=auth_header(client, "operator1", OPERATOR_PW),
     )
     assert response.status_code == 422
-    assert "40" in response.json()["detail"]
+    errors = response.json()["detail"]
+    assert any("catv" in e and "999" in e for e in errors)
+
+
+def test_every_input_problem_is_reported_at_once(client):
+    response = client.post(
+        "/predict",
+        json={"features": {"catv": "999", "vma": "fast", "speed": 80}},
+        headers=auth_header(client, "operator1", OPERATOR_PW),
+    )
+    assert response.status_code == 422
+    errors = " ".join(response.json()["detail"])
+    for fragment in ("missing features: lum", "unknown features: speed", "catv", "vma"):
+        assert fragment in errors
+
+
+def test_category_codes_may_be_sent_as_numbers(client):
+    response = client.post(
+        "/predict",
+        json={"features": {"catv": 7, "lum": 1, "vma": 80}},
+        headers=auth_header(client, "operator1", OPERATOR_PW),
+    )
+    assert response.status_code == 200
+
+
+def test_null_means_unknown(client):
+    response = client.post(
+        "/predict",
+        json={"features": {"catv": None, "lum": "1", "vma": None}},
+        headers=auth_header(client, "operator1", OPERATOR_PW),
+    )
+    assert response.status_code == 200
+
+
+def test_model_schema_lists_expected_columns(client):
+    response = client.get(
+        "/model/schema", headers=auth_header(client, "operator1", OPERATOR_PW)
+    )
+    assert response.status_code == 200
+    features = {f["name"]: f for f in response.json()["features"]}
+    assert features["catv"]["type"] == "categorical"
+    assert "7" in features["catv"]["values"]
+    assert features["vma"]["type"] == "numeric"
+
+
+def test_model_schema_requires_a_token(client):
+    assert client.get("/model/schema").status_code == 401
 
 
 def test_short_password_is_rejected(client):
@@ -240,7 +287,6 @@ def test_prediction_errors_do_not_leak_internals(client, monkeypatch):
     # module global is the model actually used by the endpoint.
     broken = MagicMock()
     broken.predict_proba.side_effect = RuntimeError("/secret/path/model.joblib missing")
-    broken.n_features_in_ = 40
     monkeypatch.setattr(main_module, "model", broken)
 
     response = client.post("/predict", json=FEATURES, headers=headers)

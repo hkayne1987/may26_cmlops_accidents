@@ -16,6 +16,11 @@ COPY pyproject.toml uv.lock ./
 # lockfile and pyproject.toml are out of sync.
 RUN uv sync --no-dev --frozen
 
+# Every `uv run` in this image then uses the environment exactly as built
+# above. Without it, uv run re-syncs on each start and pulls the dev tools
+# (ruff, mypy) back in, which is slow and needs network access.
+ENV UV_NO_SYNC=1
+
 # Copy source after dependency install (changes more often)
 COPY src/ ./src/
 

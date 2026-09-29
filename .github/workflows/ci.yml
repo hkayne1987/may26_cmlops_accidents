@@ -47,6 +47,9 @@ jobs:
 
   docker:
     name: Build images
+    # Pull requests only: once merged, release.yml builds the same images and
+    # pushes them, so building here too would only duplicate the work.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,8 +65,9 @@ jobs:
           context: .
           file: docker/api.Dockerfile
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # One cache per image, shared with release.yml under the same name.
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
 
       - name: Build training image
         uses: docker/build-push-action@v6
@@ -71,8 +75,9 @@ jobs:
           context: .
           file: docker/train.Dockerfile
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # One cache per image, shared with release.yml under the same name.
+          cache-from: type=gha,scope=training
+          cache-to: type=gha,mode=max,scope=training
 
       - name: Build DVC image
         uses: docker/build-push-action@v6
@@ -80,5 +85,6 @@ jobs:
           context: .
           file: docker/dvc.Dockerfile
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # One cache per image, shared with release.yml under the same name.
+          cache-from: type=gha,scope=dvc
+          cache-to: type=gha,mode=max,scope=dvc

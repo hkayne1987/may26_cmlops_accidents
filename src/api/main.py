@@ -13,7 +13,6 @@ from typing import Any
 
 import joblib
 import mlflow
-import numpy as np
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordRequestForm
@@ -22,7 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.api import metrics
+from src.api import metrics, prediction_log
 from src.api.auth import (
     Role,
     TokenResponse,
@@ -35,6 +34,13 @@ from src.api.auth import (
     get_secret_key,
     get_session,
     require_role,
+)
+from src.api.schema import (
+    FeatureSchema,
+    InvalidFeaturesError,
+    describe,
+    schema_from_model,
+    to_model_input,
 )
 
 logging.basicConfig(
@@ -54,9 +60,9 @@ MODEL_URI = f"models:/{REGISTERED_MODEL_NAME}@{PRODUCTION_ALIAS}"
 # Reported by /health and /predict so callers know which model answered.
 model_version: str = "unknown"
 
-# Number of features the loaded model expects, read from the model itself so
-# it cannot drift from the served version. None until a model is loaded.
-n_features_expected: int | None = None
+# Columns and allowed category values of the loaded model, read from the model
+# itself so they always match the served version. None until a model loads.
+feature_schema: FeatureSchema | None = None
 
 DECISION_THRESHOLD = 0.35  # decision threshold for the severe class
 
@@ -140,19 +146,29 @@ def refresh_model() -> None:
     Shared by startup and the reload endpoint so both go through exactly the
     same path.
     """
-    global model, model_version, n_features_expected
+    global model, model_version, feature_schema
 
     start = time.time()
     model, model_version = load_model()
     metrics.MODEL_LOAD_SECONDS.set(time.time() - start)
-    metrics.set_served_model(model_version, loaded=model is not None)
 
+    feature_schema = None
     if model is None:
         log.warning("No model available from registry or local file")
-        n_features_expected = None
     else:
-        n_features_expected = getattr(model, "n_features_in_", None)
-        log.info(f"Model expects {n_features_expected} features")
+        try:
+            feature_schema = schema_from_model(model)
+            log.info(
+                f"Model expects {len(feature_schema.names)} features, "
+                f"{len(feature_schema.categories)} of them categorical"
+            )
+        except Exception:
+            # Without its schema the model cannot read real values, so serving
+            # it would only produce wrong predictions: refuse instead.
+            log.exception("Could not read the input schema from the model")
+            model = None
+
+    metrics.set_served_model(model_version, loaded=model is not None)
 
 
 @asynccontextmanager
@@ -191,9 +207,31 @@ async def record_http_metrics(request: Request, call_next):
     return response
 
 
+# A real severe accident from the test set: a driver in a car on an 80 km/h
+# road in Haute-Corse, in daylight. Shown in the Swagger UI as the example.
+EXAMPLE_FEATURES = {
+    "place": "1", "catu": "1", "sexe": "2", "secu1": "1", "secu2": "-1",
+    "secu3": "-1", "locp": "0", "actp": "0", "etatp": "-1", "senc": "2",
+    "catv": "7", "obs": "2", "obsm": "0", "choc": "3", "manv": "13",
+    "occutc": None, "jour": 19, "mois": 6, "an": 2023, "lum": "1",
+    "dep": "2B", "com": "2B193", "agg": "1", "int": "1", "atm": "1",
+    "col": "6", "lat": 42.37663, "long": 9.18949, "catr": "2", "circ": "2",
+    "nbv": 2, "vosp": "0", "prof": "1", "plan": "3", "surf": "1",
+    "infra": "0", "situ": "3", "vma": 80, "heure": 16, "minute": 57,
+}  # fmt: skip
+
+
 # Request/Response models
 class PredictRequest(BaseModel):
-    features: list[float] = Field(..., description="Input features for prediction")
+    features: dict[str, str | int | float | None] = Field(
+        ...,
+        description=(
+            'Real BAAC values keyed by column name, e.g. "catv": "7" for '
+            "a car. Categorical codes may be strings or numbers; null means "
+            "unknown. GET /model/schema lists the expected columns and values."
+        ),
+        examples=[EXAMPLE_FEATURES],
+    )
 
 
 class PredictResponse(BaseModel):
@@ -258,6 +296,19 @@ async def read_current_user(user: User = Depends(get_current_user)):
     return UserInfo.from_user(user)
 
 
+@app.get("/model/schema", tags=["inference"])
+async def model_schema(
+    user: User = Depends(require_role(Role.OPERATOR, Role.SERVICE, Role.ADMIN)),
+):
+    """Lists the columns /predict expects and the values each one accepts.
+
+    Read from the served model, so it always matches the current version.
+    """
+    if feature_schema is None:
+        raise HTTPException(status_code=503, detail="Model not loaded.")
+    return {"model_version": model_version, "features": describe(feature_schema)}
+
+
 @app.post("/predict", response_model=PredictResponse, tags=["inference"])
 async def predict(
     request: PredictRequest,
@@ -266,25 +317,21 @@ async def predict(
     """Makes a prediction using the loaded model. Requires a valid token."""
     global model
 
-    if model is None:
+    if model is None or feature_schema is None:
         raise HTTPException(
             status_code=503, detail="Model not loaded. Train a model first."
         )
 
-    # Check the input size before inference: a wrong length otherwise fails
-    # deep inside XGBoost and surfaces as an opaque 500.
-    if n_features_expected is not None and len(request.features) != n_features_expected:
+    # Validate against the served model before inference: an unknown column
+    # or category value otherwise fails deep inside XGBoost as an opaque 500.
+    try:
+        x = to_model_input(request.features, feature_schema)
+    except InvalidFeaturesError as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=(
-                f"Expected {n_features_expected} features, got {len(request.features)}"
-            ),
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=e.errors
         )
 
     try:
-        # Reshape for single prediction
-        x = np.array(request.features).reshape(1, -1)
-
         # Get probabilities and apply our custom decision threshold
         probs = None
         if hasattr(model, "predict_proba"):
@@ -299,6 +346,20 @@ async def predict(
             model_version=model_version,
         ).inc()
         log.info(f"Prediction by {user.username}: {pred} (model v{model_version})")
+
+        # Feed drift detection. A logging failure must never cost an operator
+        # their answer, so it is counted and logged but not raised.
+        try:
+            prediction_log.record_prediction(
+                features=request.features,
+                severe_probability=probs[1] if probs else float(pred),
+                prediction=int(pred),
+                model_version=model_version,
+                username=user.username,
+            )
+        except Exception:
+            metrics.PREDICTION_LOG_FAILURES.inc()
+            log.exception("Could not write the prediction to the drift log")
         return PredictResponse(
             prediction=pred,
             probabilities=probs,

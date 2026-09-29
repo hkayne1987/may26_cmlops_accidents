@@ -4,6 +4,12 @@
 # locally. Copy env.example to .env and fill in your own DagsHub
 # credentials and a JWT signing key before starting (see README).
 
+# A fixed network name, independent of the directory the repo is cloned into:
+# containers started by Airflow join it by name to reach the Pushgateway.
+networks:
+  default:
+    name: baac
+
 services:
   # Inference API: pulls models:/xgb_severity@production from DagsHub at startup
   api:
@@ -126,6 +132,32 @@ services:
       - '--storage.tsdb.path=/prometheus'
     profiles:
       - monitoring
+
+  # Pushgateway: where batch jobs such as drift detection leave their results
+  # for Prometheus, since a job that exits cannot be scraped itself.
+  pushgateway:
+    image: prom/pushgateway:v1.11.3
+    ports:
+      - "9091:9091"
+    profiles:
+      - monitoring
+
+  # Drift detection on demand: compares logged predictions with the training
+  # data and pushes the result to the Pushgateway. Airflow runs the same
+  # command daily (dags/drift_monitoring.py).
+  # Usage: docker-compose --profile drift run --rm drift
+  drift:
+    image: baac-training:latest
+    command: ["uv", "run", "python", "-m", "src.monitoring.detection"]
+    env_file:
+      - .env
+    environment:
+      - PUSHGATEWAY_URL=http://pushgateway:9091
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+    profiles:
+      - drift
 
   # Grafana visualization (Phase 4). The Prometheus data source and the API
   # dashboard are provisioned from deployment/grafana/, nothing to click.

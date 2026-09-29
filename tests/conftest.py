@@ -5,11 +5,27 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from tests.api_helpers import ADMIN_PW, OPERATOR_PW, SERVICE_PW
+from tests.api_helpers import (
+    ADMIN_PW,
+    OPERATOR_PW,
+    SERVICE_PW,
+    STUB_CATEGORIES,
+    STUB_NAMES,
+)
 
 
 @pytest.fixture
-def client(monkeypatch):
+def prediction_db(monkeypatch, tmp_path):
+    """Points the prediction log at a throwaway database for the test."""
+    from src.api import prediction_log
+
+    engine = prediction_log.get_engine(str(tmp_path / "predictions.db"))
+    monkeypatch.setattr(prediction_log, "_engine", engine)
+    return engine
+
+
+@pytest.fixture
+def client(monkeypatch, prediction_db):
     """API client backed by an in-memory database and a stub model."""
     # Imported here so only the tests that use the API pay for loading it.
     from fastapi.testclient import TestClient
@@ -17,6 +33,7 @@ def client(monkeypatch):
 
     from src.api import auth as auth_module
     from src.api import main as main_module
+    from src.api.schema import FeatureSchema
 
     engine = auth_module.get_engine(":memory:")
 
@@ -40,11 +57,16 @@ def client(monkeypatch):
     # return a numpy array, since the endpoint calls .tolist() on the row.
     model = MagicMock()
     model.predict_proba.return_value = np.array([[0.2, 0.8]])
-    model.n_features_in_ = 40
 
     # lifespan would otherwise pull the real model from MLflow and overwrite
     # the stub, so stub the loader itself rather than the module globals.
+    # A stub has no XGBoost booster to read a schema from, so give it one.
     monkeypatch.setattr(main_module, "load_model", lambda: (model, "test"))
+    monkeypatch.setattr(
+        main_module,
+        "schema_from_model",
+        lambda m: FeatureSchema(names=STUB_NAMES, categories=STUB_CATEGORIES),
+    )
 
     with TestClient(main_module.app, raise_server_exceptions=False) as c:
         yield c

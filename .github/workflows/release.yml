@@ -55,5 +55,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}/baac-${{ matrix.name }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ github.repository }}/baac-${{ matrix.name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # One cache per image: without a scope the three images would
+          # overwrite each other's cache. Same names as in ci.yml, so pull
+          # requests can reuse the cache built here on main.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

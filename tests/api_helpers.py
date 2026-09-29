@@ -14,7 +14,13 @@ OPERATOR_PW = "operator-password"
 ADMIN_PW = "admin-password-1"
 SERVICE_PW = "service-password"
 
-FEATURES = {"features": [0.0] * 40}
+# A small stand-in for the real 40-column schema, used with the stub model:
+# two categorical BAAC columns and one numeric one are enough to exercise
+# validation and conversion.
+STUB_CATEGORIES = {"catv": ["-1", "1", "16", "7"], "lum": ["1", "2", "3"]}
+STUB_NAMES = ["catv", "lum", "vma"]
+
+FEATURES = {"features": {"catv": "7", "lum": "1", "vma": 80}}
 
 
 def token_for(client, username, password) -> str:
