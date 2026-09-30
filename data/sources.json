@@ -1,0 +1,170 @@
+{
+  "caracteristiques-2019": {
+    "title": "caracteristiques-2019.csv",
+    "url": "https://static.data.gouv.fr/resources/base-de-donnees-accidents-corporels-de-la-circulation/20201105-104400/caracteristiques-2019.csv",
+    "last_modified": "2020-11-05T10:44:06.669000+00:00",
+    "filesize": 6998722,
+    "sha1": "c1008e98ae4d6433cc79b16a5dbf95ffed116d55"
+  },
+  "caracteristiques-2020": {
+    "title": "caracteristiques-2020.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2019/20211110-111202/caracteristiques-2020.csv",
+    "last_modified": "2021-11-10T11:12:08.960000+00:00",
+    "filesize": 5655584,
+    "sha1": "aecac31214d34667a7a2c8ab179fbd25d1fe0794"
+  },
+  "caracteristiques-2021": {
+    "title": "carcteristiques-2021.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2020/20221024-113743/carcteristiques-2021.csv",
+    "last_modified": "2022-10-24T11:38:45.420000+00:00",
+    "filesize": 7045926,
+    "sha1": "e0a7eec845e634e314c1f5d656842c1bdba748db"
+  },
+  "caracteristiques-2022": {
+    "title": "carcteristiques-2022.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2021/20231005-093927/carcteristiques-2022.csv",
+    "last_modified": "2023-10-05T09:39:41.721000+00:00",
+    "filesize": 6884406,
+    "sha1": "494fd2adbc676a35b565583f284f32ee55baeeae"
+  },
+  "caracteristiques-2023": {
+    "title": "caract-2023.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2023/20241028-103125/caract-2023.csv",
+    "last_modified": "2024-10-28T10:31:45.190000+00:00",
+    "filesize": 6591826,
+    "sha1": "953aeb0118cb6ed55d4f8e6ea831ed09e14f4ecb"
+  },
+  "caracteristiques-2024": {
+    "title": "Caract_2024.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/20251021-115900/caract-2024.csv",
+    "last_modified": "2025-10-21T11:59:01.081000+00:00",
+    "filesize": 6538156,
+    "sha1": "51cf6ecf298e99e5f8ad7eb50ec24801944a1a33"
+  },
+  "lieux-2019": {
+    "title": "lieux-2019.csv",
+    "url": "https://static.data.gouv.fr/resources/base-de-donnees-accidents-corporels-de-la-circulation/20201105-104338/lieux-2019.csv",
+    "last_modified": "2020-11-05T10:43:45.165000+00:00",
+    "filesize": 5390071,
+    "sha1": "bab1d2f6a2799a24fd59bbc29b2bae4d6783a81a"
+  },
+  "lieux-2020": {
+    "title": "lieux-2020.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2019/20211110-111603/lieux-2020.csv",
+    "last_modified": "2021-11-10T11:16:08.474000+00:00",
+    "filesize": 4521088,
+    "sha1": "73a8a21443641b919e8af2489e27dca714f60daa"
+  },
+  "lieux-2021": {
+    "title": "lieux-2021.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2020/20221024-113901/lieux-2021.csv",
+    "last_modified": "2022-10-24T11:39:15.375000+00:00",
+    "filesize": 5771984,
+    "sha1": "d9274db6f788afd8e78ee366be22a3134dbc591c"
+  },
+  "lieux-2022": {
+    "title": "lieux-2022.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2021/20231005-094112/lieux-2022.csv",
+    "last_modified": "2023-10-05T09:41:20.327000+00:00",
+    "filesize": 5617313,
+    "sha1": "7e2dcda426636df97fc4c28e16d9b3df0602028f"
+  },
+  "lieux-2023": {
+    "title": "lieux-2023.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2023/20241023-153219/lieux-2023.csv",
+    "last_modified": "2024-10-23T15:32:29.599000+00:00",
+    "filesize": 7176266,
+    "sha1": "0ddcad1d5a1de09bb765bd410c0ff9d52d3a7e73"
+  },
+  "lieux-2024": {
+    "title": "Lieux_2024.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/20251021-115812/lieux-2024.csv",
+    "last_modified": "2025-10-21T11:58:13.699000+00:00",
+    "filesize": 7070795,
+    "sha1": "56b2be9a8e0daf50dcdd79bde1b020fba859fcc5"
+  },
+  "usagers-2019": {
+    "title": "usagers-2019.csv",
+    "url": "https://static.data.gouv.fr/resources/base-de-donnees-accidents-corporels-de-la-circulation/20201105-104232/usagers-2019.csv",
+    "last_modified": "2020-11-05T10:42:42.234000+00:00",
+    "filesize": 12454879,
+    "sha1": "8fba99e9246ee57454e726013ec4f1895831f6c3"
+  },
+  "usagers-2020": {
+    "title": "usagers-2020.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2019/20211110-111817/usagers-2020.csv",
+    "last_modified": "2021-11-10T11:18:20.443000+00:00",
+    "filesize": 10054646,
+    "sha1": "2c99198f42ade793dac840cad965a563f984988c"
+  },
+  "usagers-2021": {
+    "title": "usagers-2021.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2022/20231009-140337/usagers-2021.csv",
+    "last_modified": "2023-10-09T14:03:43.114000+00:00",
+    "filesize": 13028412,
+    "sha1": "9c538d2c236432e16b0658e533f171ef25518444"
+  },
+  "usagers-2022": {
+    "title": "usagers-2022.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2021/20231005-094229/usagers-2022.csv",
+    "last_modified": "2025-03-26T17:02:58.944000+00:00",
+    "filesize": 13013255,
+    "sha1": "df4761c5df6837b109ce80d73014a78800871b9e"
+  },
+  "usagers-2023": {
+    "title": "usagers-2023.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2023/20241023-153328/usagers-2023.csv",
+    "last_modified": "2024-10-23T15:33:39.692000+00:00",
+    "filesize": 13938227,
+    "sha1": "b79b03cf79b11405562cd6af54b4cb65713fbaac"
+  },
+  "usagers-2024": {
+    "title": "Usagers_2024.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/20251021-115506/usagers-2024.csv",
+    "last_modified": "2025-10-21T11:56:56.552000+00:00",
+    "filesize": 13843733,
+    "sha1": "1c03c9552eb13e63ccd1d6708d6adf5e0da1c738"
+  },
+  "vehicules-2019": {
+    "title": "vehicules-2019.csv",
+    "url": "https://static.data.gouv.fr/resources/base-de-donnees-accidents-corporels-de-la-circulation/20201105-104310/vehicules-2019.csv",
+    "last_modified": "2020-11-05T10:43:20.008000+00:00",
+    "filesize": 6921630,
+    "sha1": "2841608bf5e40943578570edd53f31357d46a975"
+  },
+  "vehicules-2020": {
+    "title": "vehicules-2020.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2019/20211110-111722/vehicules-2020.csv",
+    "last_modified": "2021-11-10T11:17:30.702000+00:00",
+    "filesize": 5492931,
+    "sha1": "1dff8742e6af1d06a9e288d5abedaeaa859cb6d1"
+  },
+  "vehicules-2021": {
+    "title": "vehicules-2021.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2020/20221024-113925/vehicules-2021.csv",
+    "last_modified": "2022-10-24T11:39:53.069000+00:00",
+    "filesize": 6202316,
+    "sha1": "8ed362bc16cd45c7d5ec41ccc5b002b1d3780822"
+  },
+  "vehicules-2022": {
+    "title": "vehicules-2022.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2021/20231005-094147/vehicules-2022.csv",
+    "last_modified": "2023-10-05T09:41:54.634000+00:00",
+    "filesize": 6021965,
+    "sha1": "9eebc6381965ba230926e8d2681862b5ddd8c23b"
+  },
+  "vehicules-2023": {
+    "title": "vehicules-2023.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2023/20241023-153253/vehicules-2023.csv",
+    "last_modified": "2024-10-23T15:33:01.820000+00:00",
+    "filesize": 6431828,
+    "sha1": "5c037e9f747ebc0ac2b2abe13644eee772dc27a2"
+  },
+  "vehicules-2024": {
+    "title": "Vehicules_2024.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/20251107-100240/vehicules-2024.csv",
+    "last_modified": "2025-12-29T09:29:20.308000+00:00",
+    "filesize": 6369908,
+    "sha1": "a1a4c1bfe86181d7c9ee8f68309462dae5e2159a"
+  }
+}

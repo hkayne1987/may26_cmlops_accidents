@@ -169,7 +169,7 @@ def test_preprocess_all_uses_pipeline(monkeypatch, tmp_path):
     # Monkeypatch the sub-steps to avoid heavy IO
     df_sample = pd.DataFrame({"Num_Acc": [1, 1], "grave": [0, 1]})
 
-    monkeypatch.setattr(preprocess, "YEARS", [2022])
+    monkeypatch.setattr(preprocess, "discover_years", lambda: [2022])
     monkeypatch.setattr(
         preprocess,
         "load_year",
@@ -211,3 +211,16 @@ def test_preprocess_all_uses_pipeline(monkeypatch, tmp_path):
     assert isinstance(test, pd.DataFrame)
     # Ensure parquet write was attempted
     assert any("train.parquet" in p for p in saved.keys())
+
+
+def test_discover_years_reads_complete_years_from_the_files(tmp_path):
+    for table in preprocess.TABLES:
+        for year in (2018, 2023, 2024):
+            (tmp_path / f"{table}-{year}.csv").write_text("x")
+    # 2025 is incomplete: only two of the four tables were published.
+    (tmp_path / "caracteristiques-2025.csv").write_text("x")
+    (tmp_path / "lieux-2025.csv").write_text("x")
+    (tmp_path / "notes-2024.csv").write_text("x")  # not a BAAC table
+
+    # 2018 predates the 2019 format change and is never used.
+    assert preprocess.discover_years(tmp_path) == [2023, 2024]
