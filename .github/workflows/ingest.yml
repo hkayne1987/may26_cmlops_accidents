@@ -1,0 +1,92 @@
+name: Data ingestion
+
+# Checks data.gouv.fr for new or corrected BAAC files. When something changed,
+# downloads it, versions it with DVC on DagsHub and opens a pull request.
+# Merging that pull request is what triggers retraining (retrain.yml): a human
+# reviews new data before any model is trained on it.
+#
+# Monthly: a new BAAC year comes out once a year, around October, and past
+# years are corrected at any time. A yearly check could miss either.
+
+on:
+  schedule:
+    - cron: "0 6 1 * *"  # 06:00 UTC on the 1st of each month
+  workflow_dispatch:
+
+# Never two ingestions at once: they would push competing data versions.
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    name: Check data.gouv.fr
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # push the pull request branch
+      pull-requests: write   # open the pull request
+    env:
+      DAGSHUB_USER: ${{ secrets.DAGSHUB_USER }}
+      DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        # Python version comes from .python-version.
+        run: uv sync --frozen
+
+      # Cheap check first: one API call, nothing downloaded.
+      - name: Detect changes
+        id: detect
+        run: uv run python -m src.data.ingest --dry-run
+
+      - name: Authenticate DVC against DagsHub
+        if: steps.detect.outputs.changed == 'true'
+        run: |
+          uv run dvc remote modify origin --local auth basic
+          uv run dvc remote modify origin --local user "$DAGSHUB_USER"
+          uv run dvc remote modify origin --local password "$DAGSHUB_TOKEN"
+
+      # The current data is needed: `dvc add data/raw` versions the whole
+      # folder, so missing files would be dropped from the new version.
+      - name: Pull the current data
+        if: steps.detect.outputs.changed == 'true'
+        run: uv run dvc pull data/raw.dvc
+
+      - name: Download new or corrected files
+        id: ingest
+        if: steps.detect.outputs.changed == 'true'
+        run: uv run python -m src.data.ingest
+
+      - name: Version the data on DagsHub
+        if: steps.ingest.outputs.changed == 'true'
+        run: |
+          uv run dvc add data/raw
+          uv run dvc push data/raw.dvc
+
+      - name: Open a pull request
+        if: steps.ingest.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: data/baac-update
+          delete-branch: true
+          add-paths: |
+            data/raw.dvc
+            data/sources.json
+          commit-message: "Data: update BAAC files from data.gouv.fr"
+          title: "Data: update BAAC files from data.gouv.fr"
+          body: |
+            New or corrected BAAC files were published on data.gouv.fr:
+
+            ${{ steps.ingest.outputs.summary }}
+
+            They are already versioned on DagsHub (`data/raw.dvc`).
+            **Merging this pull request starts retraining** (`retrain.yml`);
+            the new model only reaches production if it clears the release
+            gate in `src/training/promote.py`.
+
+            Worth checking before merging: the file format may change between
+            years (column renamed in 2022, for instance).
