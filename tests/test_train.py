@@ -93,3 +93,21 @@ def test_save_model_writes_files(monkeypatch, tmp_path):
     assert (tmp_path / train_module.MODEL_FILENAME).exists()
     assert (tmp_path / "feature_columns.json").exists()
     assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_data_version_is_the_dvc_hash_of_the_raw_data(tmp_path, monkeypatch):
+    monkeypatch.delenv("DATA_VERSION", raising=False)
+    dvc_file = tmp_path / "raw.dvc"
+    dvc_file.write_text(
+        "outs:\n- md5: 8cbc02023086239ce111fbc02b391815.dir\n  path: raw\n"
+    )
+    assert train_module.get_data_version(dvc_file) == (
+        "raw:8cbc02023086239ce111fbc02b391815"
+    )
+
+
+def test_data_version_without_dvc_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("DATA_VERSION", raising=False)
+    assert train_module.get_data_version(tmp_path / "missing.dvc") == "unknown"
+    monkeypatch.setenv("DATA_VERSION", "manual")
+    assert train_module.get_data_version(tmp_path / "missing.dvc") == "manual"

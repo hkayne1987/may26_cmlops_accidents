@@ -9,6 +9,7 @@ Run via 'python -m src.training.train'.
 
 import logging
 import os
+import re
 from pathlib import Path
 
 import joblib
@@ -151,12 +152,20 @@ def save_model(model, X_train):
     log.info(f"Feature schema saved: {schema_path}")
 
 
-def get_data_version() -> str:
-    """Returns the DVC data version for lineage tracking.
+def get_data_version(dvc_file: Path = Path("data/raw.dvc")) -> str:
+    """Returns the DVC version of the raw data, logged on every MLflow run.
 
-    Placeholder until the DVC pipeline is in place (tracked separately by the team).
+    It is the md5 DVC records for data/raw in data/raw.dvc: the same hash
+    identifies the exact data on DagsHub, so any model can be traced back to
+    the files it was trained on. DATA_VERSION overrides it.
     """
-    return os.environ.get("DATA_VERSION", "pending-dvc")
+    if "DATA_VERSION" in os.environ:
+        return os.environ["DATA_VERSION"]
+    if dvc_file.exists():
+        match = re.search(r"md5:\s*([0-9a-f]{32})", dvc_file.read_text())
+        if match:
+            return f"raw:{match.group(1)}"
+    return "unknown"
 
 
 def log_mlflow_run(model, X_train) -> str:
