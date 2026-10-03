@@ -59,7 +59,8 @@ MODEL_LOAD_SECONDS = Gauge(
 
 MODEL_RELOADS = Counter(
     "api_model_reloads_total",
-    "Model reloads through /admin/reload-model, by result.",
+    "Model reloads by result: success (/admin/reload-model), "
+    "auto (new @production found in the registry) or no_model.",
     ["result"],
 )
 
