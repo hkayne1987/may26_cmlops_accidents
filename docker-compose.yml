@@ -16,8 +16,12 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    # Pinned like the other images, so names do not depend on the directory.
-    image: baac-api:latest
+    # The image release.yml publishes on every merge to main. `docker-compose
+    # build` still builds it locally under the same name for development.
+    image: ghcr.io/hkayne1987/may26_cmlops_accidents/baac-api:latest
+    labels:
+      # Lets Watchtower (autoupdate profile) replace it with a newer release.
+      - com.centurylinklabs.watchtower.enable=true
     ports:
       - "8000:8000"
     env_file:
@@ -44,9 +48,8 @@ services:
     build:
       context: .
       dockerfile: docker/train.Dockerfile
-    # Pinned so the name does not depend on the directory the repo sits in:
-    # the Airflow DAG starts this image by name.
-    image: baac-training:latest
+    # Published by release.yml; the Airflow DAGs start it by this name.
+    image: ghcr.io/hkayne1987/may26_cmlops_accidents/baac-training:latest
     env_file:
       - .env
     volumes:
@@ -64,8 +67,8 @@ services:
     build:
       context: .
       dockerfile: docker/dvc.Dockerfile
-    # Pinned for the same reason as the training image.
-    image: baac-dvc:latest
+    # Published by release.yml, like the training image.
+    image: ghcr.io/hkayne1987/may26_cmlops_accidents/baac-dvc:latest
     env_file:
       - .env
     volumes:
@@ -116,6 +119,25 @@ services:
     profiles:
       - airflow
 
+  # Watchtower: keeps the running API on the latest image published by CI.
+  # Checks GHCR every 5 minutes and recreates the api container when a new
+  # baac-api:latest is out. Opt-in, because in development it would replace
+  # an image just built locally with the published one.
+  # Usage: docker-compose --profile autoupdate up -d
+  # nicholas-fedor's fork: the original containrrr/watchtower is archived.
+  watchtower:
+    image: nickfedor/watchtower:1.22.3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Only containers labelled com.centurylinklabs.watchtower.enable=true.
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_POLL_INTERVAL=300
+      # Remove the replaced image so old releases do not pile up on disk.
+      - WATCHTOWER_CLEANUP=true
+    profiles:
+      - autoupdate
+
   # Prometheus monitoring (Phase 4). Scrapes the API's /metrics over the
   # Docker network, see deployment/prometheus/prometheus.yml.
   # Usage: docker-compose --profile monitoring up -d   -> http://localhost:9090
@@ -147,7 +169,7 @@ services:
   # command daily (dags/drift_monitoring.py).
   # Usage: docker-compose --profile drift run --rm drift
   drift:
-    image: baac-training:latest
+    image: ghcr.io/hkayne1987/may26_cmlops_accidents/baac-training:latest
     command: ["uv", "run", "python", "-m", "src.monitoring.detection"]
     env_file:
       - .env
