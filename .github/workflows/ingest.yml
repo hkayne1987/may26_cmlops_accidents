@@ -71,6 +71,10 @@ jobs:
         if: steps.ingest.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
+          # A personal token when set: GITHUB_TOKEN may not open pull requests
+          # (a repository setting only the owner can change), and pull requests
+          # it opens do not trigger CI. Falls back to GITHUB_TOKEN otherwise.
+          token: ${{ secrets.DATA_PR_TOKEN || secrets.GITHUB_TOKEN }}
           branch: data/baac-update
           delete-branch: true
           add-paths: |

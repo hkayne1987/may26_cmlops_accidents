@@ -403,22 +403,21 @@ The packages are public: anyone can pull them without logging in.
 or corrected BAAC files. **`retrain.yml`** runs when `data/raw.dvc` changes on
 `main`. Both are described below.
 
-### Repository settings they need
+### Secrets they need
 
-Done once by a repository admin, in the repository **Settings**:
+Set in the repository **Settings → Secrets and variables → Actions**:
 
-1. **Secrets and variables → Actions → New repository secret**, twice:
+| Name | Value | Used by |
+|---|---|---|
+| `DAGSHUB_USER` | a DagsHub username with write access to the repository | `ingest.yml`, `retrain.yml` |
+| `DAGSHUB_TOKEN` | that user's DagsHub access token | `ingest.yml`, `retrain.yml` |
+| `DATA_PR_TOKEN` | a member's GitHub classic token, `public_repo` scope only | `ingest.yml` |
 
-   | Name | Value |
-   |---|---|
-   | `DAGSHUB_USER` | a DagsHub username with write access to the repository |
-   | `DAGSHUB_TOKEN` | that user's DagsHub access token |
-
-   They let the workflows pull and push data with DVC and log runs to MLflow.
-2. **Actions → General → Workflow permissions**: tick *Allow GitHub Actions to
-   create and approve pull requests*, so `ingest.yml` can open its pull request.
-
-`ci.yml` and `release.yml` need neither: they use the token GitHub provides.
+`DATA_PR_TOKEN` is there because GitHub's own workflow token may not open pull
+requests unless the repository owner allows it, which collaborators cannot do.
+The data pull requests are therefore opened in that member's name, and
+`ingest.yml` fails once the token expires: generate a new one then. Without the
+secret, `ingest.yml` falls back to GitHub's token.
 
 ## Automatic updates
 
