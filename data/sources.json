@@ -76,13 +76,6 @@
     "filesize": 7176266,
     "sha1": "0ddcad1d5a1de09bb765bd410c0ff9d52d3a7e73"
   },
-  "lieux-2024": {
-    "title": "Lieux_2024.csv",
-    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/20251021-115812/lieux-2024.csv",
-    "last_modified": "2025-10-21T11:58:13.699000+00:00",
-    "filesize": 7070795,
-    "sha1": "56b2be9a8e0daf50dcdd79bde1b020fba859fcc5"
-  },
   "usagers-2019": {
     "title": "usagers-2019.csv",
     "url": "https://static.data.gouv.fr/resources/base-de-donnees-accidents-corporels-de-la-circulation/20201105-104232/usagers-2019.csv",
