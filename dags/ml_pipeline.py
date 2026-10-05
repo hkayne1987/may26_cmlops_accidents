@@ -29,10 +29,17 @@ from docker.types import Mount
 # docker-compose sets this from the host shell.
 HOST_PROJECT_DIR = os.environ["HOST_PROJECT_DIR"]
 
-# Image names are pinned in docker-compose.yml so they do not depend on the
-# directory the repo was cloned into.
-TRAINING_IMAGE = os.environ.get("TRAINING_IMAGE", "baac-training:latest")
-DVC_IMAGE = os.environ.get("DVC_IMAGE", "baac-dvc:latest")
+# The images release.yml publishes on every merge to main, same names as in
+# docker-compose.yml.
+TRAINING_IMAGE = os.environ.get(
+    "TRAINING_IMAGE", "ghcr.io/hkayne1987/may26_cmlops_accidents/baac-training:latest"
+)
+DVC_IMAGE = os.environ.get(
+    "DVC_IMAGE", "ghcr.io/hkayne1987/may26_cmlops_accidents/baac-dvc:latest"
+)
+# Pull before each task so the pipeline always runs the latest published code.
+# Set PULL_IMAGES=false to run images built locally and not yet published.
+PULL_IMAGES = os.environ.get("PULL_IMAGES", "true").lower() == "true"
 
 # Credentials reach the tasks through the Airflow container's own environment,
 # which docker-compose fills from .env. Nothing is hardcoded here.
@@ -71,6 +78,7 @@ def docker_task(task_id: str, image: str, command: str, mounts: list, **kwargs):
         docker_url="unix://var/run/docker.sock",
         network_mode="bridge",
         auto_remove="success",
+        force_pull=PULL_IMAGES,
         # Airflow's default tmp mount collides with the images' own /tmp usage.
         mount_tmp_dir=False,
         **kwargs,

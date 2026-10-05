@@ -1,0 +1,67 @@
+name: Retrain
+
+# Retrains the model when the data version changes on main, typically when a
+# pull request opened by ingest.yml is merged. Same steps as the Airflow DAG
+# ml_pipeline, run on the GitHub runner against the DagsHub registry:
+#
+#   dvc pull -> preprocess -> train -> evaluate -> promote
+#
+# promote is the release gate: the new model only becomes @production if its
+# metrics clear the thresholds in src/training/promote.py. If not, this run
+# fails and production keeps serving the previous model. The API notices a
+# promoted model by itself (it polls the registry), so there is no reload step.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - data/raw.dvc
+  workflow_dispatch:
+
+# A newer data version supersedes a retrain still in progress.
+concurrency:
+  group: retrain
+  cancel-in-progress: true
+
+jobs:
+  retrain:
+    name: Train, evaluate and gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MLFLOW_TRACKING_URI: https://dagshub.com/hkayne1987/may26_cmlops_accidents.mlflow
+      MLFLOW_TRACKING_USERNAME: ${{ secrets.DAGSHUB_USER }}
+      MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_TOKEN }}
+      DAGSHUB_USER: ${{ secrets.DAGSHUB_USER }}
+      DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+      # Run in the environment installed below, without dev tools: otherwise
+      # every `uv run` would re-sync and install ruff and mypy again.
+      UV_NO_SYNC: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Pull the data from DagsHub
+        run: |
+          uv run dvc remote modify origin --local auth basic
+          uv run dvc remote modify origin --local user "$DAGSHUB_USER"
+          uv run dvc remote modify origin --local password "$DAGSHUB_TOKEN"
+          uv run dvc pull data/raw.dvc
+
+      - name: Preprocess
+        run: uv run python -m src.data.preprocess
+
+      - name: Train
+        # Logs the DVC hash of data/raw as data_version on the MLflow run.
+        run: uv run python -m src.training.train
+
+      - name: Evaluate
+        run: uv run python -m src.training.evaluate
+
+      - name: Release gate
+        run: uv run python -m src.training.promote

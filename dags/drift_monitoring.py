@@ -20,7 +20,11 @@ from docker.types import Mount
 # See ml_pipeline.py: task containers are siblings of Airflow on the host, so
 # their bind mounts use host paths.
 HOST_PROJECT_DIR = os.environ["HOST_PROJECT_DIR"]
-TRAINING_IMAGE = os.environ.get("TRAINING_IMAGE", "baac-training:latest")
+TRAINING_IMAGE = os.environ.get(
+    "TRAINING_IMAGE", "ghcr.io/hkayne1987/may26_cmlops_accidents/baac-training:latest"
+)
+# See ml_pipeline.py: run the latest published image unless told otherwise.
+PULL_IMAGES = os.environ.get("PULL_IMAGES", "true").lower() == "true"
 # The compose network, named in docker-compose.yml, where the Pushgateway is.
 COMPOSE_NETWORK = os.environ.get("COMPOSE_NETWORK", "baac")
 
@@ -70,5 +74,6 @@ with DAG(
         docker_url="unix://var/run/docker.sock",
         network_mode=COMPOSE_NETWORK,
         auto_remove="success",
+        force_pull=PULL_IMAGES,
         mount_tmp_dir=False,
     )

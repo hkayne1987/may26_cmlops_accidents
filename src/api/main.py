@@ -4,6 +4,7 @@ FastAPI Inference Service
 Phase 1 deliverable: Basic inference API for ML model serving.
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -171,6 +172,46 @@ def refresh_model() -> None:
     metrics.set_served_model(model_version, loaded=model is not None)
 
 
+# How often to check the registry for a newly promoted model. 0 disables it.
+MODEL_POLL_SECONDS = int(os.environ.get("MODEL_POLL_SECONDS", "300"))
+
+
+def production_version() -> str | None:
+    """Version currently behind @production in the registry, None if unknown."""
+    if not os.environ.get("MLFLOW_TRACKING_URI"):
+        return None
+    try:
+        return str(
+            mlflow.MlflowClient()
+            .get_model_version_by_alias(REGISTERED_MODEL_NAME, PRODUCTION_ALIAS)
+            .version
+        )
+    except Exception as e:
+        log.warning(f"Could not read @{PRODUCTION_ALIAS} from the registry: {e}")
+        return None
+
+
+async def watch_registry(interval: float) -> None:
+    """Reloads the model when another version is promoted to @production.
+
+    This is what closes the loop with retraining in GitHub Actions: CI cannot
+    reach this API, so the API checks the registry itself instead of waiting
+    to be told. /admin/reload-model stays available for an immediate reload.
+    """
+    while True:
+        await asyncio.sleep(interval)
+        # The MLflow client blocks: keep it off the event loop.
+        latest = await asyncio.to_thread(production_version)
+        if latest is not None and latest != model_version:
+            log.info(f"@{PRODUCTION_ALIAS} moved to v{latest}, reloading")
+            previous = model_version
+            await asyncio.to_thread(refresh_model)
+            metrics.MODEL_RELOADS.labels(
+                result="auto" if model is not None else "no_model"
+            ).inc()
+            log.info(f"Model reloaded automatically: v{previous} -> v{model_version}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Fail fast on a missing or weak signing key rather than starting an
@@ -178,7 +219,14 @@ async def lifespan(app: FastAPI):
     get_secret_key()
 
     refresh_model()
+
+    watcher = None
+    if MODEL_POLL_SECONDS > 0 and os.environ.get("MLFLOW_TRACKING_URI"):
+        watcher = asyncio.create_task(watch_registry(MODEL_POLL_SECONDS))
+        log.info(f"Watching @{PRODUCTION_ALIAS} every {MODEL_POLL_SECONDS}s")
     yield
+    if watcher is not None:
+        watcher.cancel()
 
 
 app = FastAPI(

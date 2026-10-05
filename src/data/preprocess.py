@@ -11,9 +11,35 @@ log = logging.getLogger(__name__)
 
 RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
-YEARS = [2019, 2020, 2021, 2022, 2023, 2024]
+# The BAAC format changed in 2019 (TRAxy reform): earlier years are not
+# comparable and are never used, even if present.
+FIRST_YEAR = 2019
 SEP = ";"
 TABLES = ["caracteristiques", "lieux", "vehicules", "usagers"]
+
+
+def discover_years(raw_dir: Path = RAW_DIR) -> list[int]:
+    """Years from FIRST_YEAR on whose four tables are all in raw_dir.
+
+    Read from the files rather than hard-coded, so a year added by the
+    data.gouv.fr ingestion (src/data/ingest.py) is picked up with no code
+    change. A year missing a table is reported and left out.
+    """
+    found: dict[int, set[str]] = {}
+    for path in raw_dir.glob("*-*.csv"):
+        table, _, suffix = path.stem.rpartition("-")
+        if table in TABLES and suffix.isdigit() and int(suffix) >= FIRST_YEAR:
+            found.setdefault(int(suffix), set()).add(table)
+
+    years = []
+    for year in sorted(found):
+        missing = set(TABLES) - found[year]
+        if missing:
+            log.warning(f"{year} skipped, missing tables: {sorted(missing)}")
+        else:
+            years.append(year)
+    return years
+
 
 TEST_SIZE = 0.2
 RANDOM_STATE = 0
@@ -239,8 +265,16 @@ def preprocess_all():
     """Loads, merges and preprocesses all years, concatenates everything
     and writes the final dataset to data/processed/.
     """
+    years = discover_years()
+    if not years:
+        raise FileNotFoundError(
+            f"No complete year from {FIRST_YEAR} on in {RAW_DIR}: pull the data "
+            "first (docker-compose --profile dvc run --rm dvc pull)"
+        )
+    log.info(f"Years found in {RAW_DIR}: {years}")
+
     frames = []
-    for year in YEARS:
+    for year in years:
         tables = load_year(year)
         df = merge_tables(tables)
         df = build_target(df)
@@ -249,7 +283,7 @@ def preprocess_all():
         log.info(f"--- {year} processed: {len(df)} users ---")
 
     full = pd.concat(frames, ignore_index=True)
-    log.info(f"Concatenation: {full.shape[0]} users over {len(YEARS)} years")
+    log.info(f"Concatenation: {full.shape[0]} users over {len(years)} years")
 
     # Fix categories on the full dataset before splitting, to ensure
     # that train and test share the same feature schema

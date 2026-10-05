@@ -68,8 +68,11 @@ docker-compose --profile dvc run --rm dvc push
 ```
 
 The original source is
-[data.gouv.fr](https://www.data.gouv.fr/datasets/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/);
-the variable description PDF is in `docs/`.
+[data.gouv.fr](https://www.data.gouv.fr/datasets/53698f4ca3a729239d2036df/);
+the variable description PDF is in `docs/`. New years and corrections are
+picked up from there automatically every month, and `data/sources.json`
+records which published file each local one comes from, see
+[Automatic updates](#automatic-updates).
 
 ## Pipeline
 
@@ -105,8 +108,13 @@ make tune-sample    # run hyperparameter search on a subsample (quick test)
 
 Experiment tracking and the model registry are hosted on
 [DagsHub](https://dagshub.com/hkayne1987/may26_cmlops_accidents). Training logs
-hyperparameters, metrics and the data version there, and registers the model as
-`xgb_severity` with a `production` alias pointing at the latest version.
+hyperparameters, metrics and the data version there, and registers each model
+as a new version of `xgb_severity`. The `production` alias only moves when the
+model clears the [release gate](#the-release-gate).
+
+The data version is the md5 DVC records for `data/raw` in `data/raw.dvc`
+(`raw:8cbc0202...`), so any model can be traced back to the exact files it was
+trained on.
 
 Create a `.env` file at the repo root (it is gitignored — never commit it):
 
@@ -129,8 +137,13 @@ The API needs `JWT_SECRET_KEY` there or it refuses to start, see
 [Authentication](#authentication).
 
 ```bash
-docker-compose up -d --build api     # inference API on http://localhost:8000
+docker-compose up -d api             # inference API on http://localhost:8000
 ```
+
+The images are the ones CI publishes on GHCR (see [CI/CD](#cicd)): `up` pulls
+them if they are missing, `docker-compose pull` fetches the latest release.
+To run local changes instead, build them under the same name with
+`docker-compose build api` (or `up -d --build api`).
 
 The API pulls `models:/xgb_severity@production` from the registry at startup
 (~10-15s), falling back to `models/xgb_severity.joblib` if the registry is
@@ -149,8 +162,9 @@ docker-compose --profile training run --rm training \
   uv run python -m src.training.train --sample
 ```
 
-This publishes a new model version, moves the `production` alias to it, and the
-API serves it after a `docker-compose restart api`.
+This registers a new model version. It only reaches production through the
+release gate, and the API then picks it up on its own within 5 minutes, see
+[Automatic updates](#automatic-updates).
 
 Prometheus and Grafana sit behind a `monitoring` profile, see
 [Monitoring](#monitoring).
@@ -348,7 +362,9 @@ deployment.
 
 ## CI/CD
 
-Two workflows, both in `.github/workflows/`.
+Four workflows, all in `.github/workflows/`. The first two check and publish
+the code; the last two keep the data and the model up to date, see
+[Automatic updates](#automatic-updates).
 
 **`ci.yml`** runs on every pull request and every push to `main`:
 
@@ -358,7 +374,7 @@ Two workflows, both in `.github/workflows/`.
 | Format | `ruff format --check src/ tests/` |
 | Types | `mypy src/` |
 | Tests | `pytest tests/ --cov=src` |
-| Images | builds the three Dockerfiles without pushing |
+| Images | builds the three Dockerfiles without pushing (pull requests only) |
 
 **`release.yml`** runs once a change is merged to `main`, and publishes the
 three images to the GitHub Container Registry:
@@ -381,8 +397,103 @@ GHCR rather than Docker Hub: the registry token is provided by GitHub itself
 images belong to the repository rather than to one member's personal account.
 Docker Hub organisations are a paid feature.
 
-Packages are private by default. Make them public from the repository's
-Packages page if the team wants to pull without authenticating.
+The packages are public: anyone can pull them without logging in.
+
+**`ingest.yml`** runs on the 1st of each month and checks data.gouv.fr for new
+or corrected BAAC files. **`retrain.yml`** runs when `data/raw.dvc` changes on
+`main`. Both are described below.
+
+### Secrets they need
+
+Set in the repository **Settings → Secrets and variables → Actions**:
+
+| Name | Value | Used by |
+|---|---|---|
+| `DAGSHUB_USER` | a DagsHub username with write access to the repository | `ingest.yml`, `retrain.yml` |
+| `DAGSHUB_TOKEN` | that user's DagsHub access token | `ingest.yml`, `retrain.yml` |
+| `DATA_PR_TOKEN` | a member's GitHub classic token, `public_repo` scope only | `ingest.yml` |
+
+`DATA_PR_TOKEN` is there because GitHub's own workflow token may not open pull
+requests unless the repository owner allows it, which collaborators cannot do.
+The data pull requests are therefore opened in that member's name, and
+`ingest.yml` fails once the token expires: generate a new one then. Without the
+secret, `ingest.yml` falls back to GitHub's token.
+
+## Automatic updates
+
+From a new file on data.gouv.fr to the model and code the API serves, with a
+human decision in the middle:
+
+| Step | Where | What happens |
+|---|---|---|
+| 1. Detection | `ingest.yml`, monthly | compares data.gouv.fr with `data/sources.json` |
+| 2. Ingestion | `ingest.yml` | downloads new or corrected files, versions them on DagsHub with DVC |
+| 3. Review | pull request | a human checks the new data and merges, or not |
+| 4. Retraining | `retrain.yml`, on merge | dvc pull, preprocess, train, evaluate, release gate |
+| 5. Model update | the API | sees `@production` move in the registry and reloads, no restart |
+| 6. Code update | Watchtower | replaces the running API when CI publishes a new image |
+
+### 1-3. New data
+
+`src/data/ingest.py` asks the data.gouv.fr API which BAAC files exist from
+2019 on. File names change every year (`caracteristiques-2019`,
+`carcteristiques-2021`, `caract-2023`, `Caract_2024`), so tables are recognised
+by prefix and saved under one naming scheme in `data/raw/`.
+
+A file counts as changed when its date or size differs from
+`data/sources.json`, the manifest of the files in use. It is then downloaded
+and hashed: only a different content is a change, since the API omits the
+checksum for some files and a metadata edit alone must not trigger a retrain.
+When nothing changed, the workflow stops after one API call, with no pull
+request and no notification.
+
+Monthly rather than yearly: a new year comes out around October, but past
+years are corrected at any time (`usagers-2022` was republished in 2025).
+
+```bash
+uv run python -m src.data.ingest --dry-run   # what changed, nothing downloaded
+```
+
+`src/data/preprocess.py` finds the years from the files present, so a new year
+needs no code change.
+
+Two things to know:
+
+- On a public repository, GitHub **disables scheduled workflows after 60 days
+  without activity**. Re-enable `ingest.yml` from the Actions tab if it stops.
+- A file whose metadata changed but content did not is downloaded again each
+  month, until the next real data pull request records it. Harmless.
+
+### 4. Retraining
+
+`retrain.yml` runs the same steps as the Airflow `ml_pipeline` DAG, on the
+GitHub runner. Each run logs the data version (`raw:<md5 of data/raw>`) to
+MLflow. A model that falls short of the [release gate](#the-release-gate) fails
+the run and never reaches production. It can also be started by hand from the
+Actions tab.
+
+### 5. The API follows the registry
+
+The API checks every `MODEL_POLL_SECONDS` (default 300, `0` disables it) which
+version carries `@production`, and reloads when it moved. It keeps answering
+with the previous model while the new one downloads. `POST
+/admin/reload-model` still forces an immediate reload.
+
+### 6. Watchtower updates the running API
+
+```bash
+docker-compose --profile autoupdate up -d
+```
+
+[Watchtower](https://github.com/nicholas-fedor/watchtower) (the maintained
+fork; the original is archived) checks GHCR every 5 minutes and recreates the
+`api` container when a new `baac-api:latest` is out, keeping its settings. It
+only touches containers labelled `com.centurylinklabs.watchtower.enable=true`.
+
+It is opt-in because in development it would replace an image you just built
+locally with the published one. For the same reason, the Airflow DAGs pull the
+published images before each task: set `PULL_IMAGES=false` in `.env` to run
+local builds instead.
 
 ## Monitoring
 
