@@ -39,6 +39,35 @@ uv sync
 > macOS note: XGBoost requires the OpenMP runtime. If you hit a
 > `libxgboost.dylib could not be loaded` error, run `brew install libomp`.
 
+## Quick start
+
+The whole stack runs from `make`; `make help` lists every target. First time on
+a machine:
+
+```bash
+make setup                                    # uv sync, creates .env from env.example
+# fill in .env: DagsHub credentials, JWT_SECRET_KEY, API_PASSWORD
+make data                                     # pull the raw data (DVC), preprocess it
+make users ARGS="create <name> --role admin"
+make users ARGS="create airflow_service --role service"   # password = API_PASSWORD
+```
+
+Then, each time:
+
+```bash
+make up                                       # API on :8000, Grafana on :3000, Prometheus on :9090
+make health                                   # model loaded, version served
+make replay                                   # send real accidents to the API
+make drift                                    # data drift check, result in Grafana
+make airflow                                  # optional, Airflow on :8080 (~40 s to start)
+make airflow-password                         # its admin password
+make down                                     # stop everything, data kept
+```
+
+`make clean-state` also erases what the stack recorded (metrics, Airflow
+history, drift reports, logged predictions) and `make clean-images` removes the
+Docker images. Neither touches the data, the models or the API accounts.
+
 ## Data
 
 The BAAC data is versioned with DVC on DagsHub, not stored in Git. Git only
@@ -287,7 +316,7 @@ TOKEN=$(curl -s -X POST http://localhost:8000/token \
 curl -X POST http://localhost:8000/predict \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"features": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}'
+  -d @request.json   # a body like the one in Request format above
 ```
 
 Tokens expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (30 by default). Disabling an

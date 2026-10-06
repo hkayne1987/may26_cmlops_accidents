@@ -282,6 +282,23 @@ class PredictRequest(BaseModel):
     )
 
 
+def openapi_keeping_nulls() -> dict[str, Any]:
+    """The OpenAPI schema, with the /predict example restored in full.
+
+    FastAPI drops every null from the schema it generates, so the example lost
+    "occutc": null and Swagger's "Try it out" sent a request the API rejects
+    for a missing column. Put the complete example back.
+    """
+    if app.openapi_schema is None:
+        schema = FastAPI.openapi(app)
+        features = schema["components"]["schemas"]["PredictRequest"]["properties"]
+        features["features"]["examples"] = [EXAMPLE_FEATURES]
+    return app.openapi_schema  # type: ignore[return-value]
+
+
+app.openapi = openapi_keeping_nulls  # type: ignore[method-assign]
+
+
 class PredictResponse(BaseModel):
     prediction: float | int
     probabilities: list[float] | None = None

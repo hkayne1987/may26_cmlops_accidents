@@ -35,6 +35,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Emulates arm64 so the images also build for Apple Silicon Macs.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -51,6 +55,9 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
+          # amd64 for Linux servers and Intel Macs, arm64 for Apple Silicon:
+          # Docker picks the right one on each machine.
+          platforms: linux/amd64,linux/arm64
           # Two tags: the commit SHA pins a build for good, latest follows main.
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository }}/baac-${{ matrix.name }}:${{ github.sha }}

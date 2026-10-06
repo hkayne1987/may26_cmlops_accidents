@@ -94,12 +94,14 @@ with DAG(
     catchup=False,
     tags=["mlops", "training"],
 ) as dag:
-    # Pull the DVC-tracked data from DagsHub so the pipeline starts from a
-    # known version rather than whatever happens to sit on the host.
+    # Pull the DVC-tracked raw data from DagsHub so the pipeline starts from a
+    # known version rather than whatever happens to sit on the host. Only
+    # data/raw: preprocess rebuilds data/processed, and pulling the stale copy
+    # in dvc.lock fails when the local files differ from it.
     dvc_pull = docker_task(
         task_id="dvc_pull",
         image=DVC_IMAGE,
-        command="pull",
+        command="pull data/raw.dvc",
         mounts=[REPO_MOUNT],
     )
 
