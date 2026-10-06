@@ -47,7 +47,7 @@ a machine:
 ```bash
 make setup                                    # uv sync, creates .env from env.example
 # fill in .env: DagsHub credentials, JWT_SECRET_KEY, API_PASSWORD
-make data                                     # pull the data from DagsHub (DVC)
+make data                                     # pull the raw data (DVC), preprocess it
 make users ARGS="create <name> --role admin"
 make users ARGS="create airflow_service --role service"   # password = API_PASSWORD
 ```

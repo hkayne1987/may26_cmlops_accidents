@@ -4,7 +4,7 @@
 help:
 	@echo "Stack (see README, Quick start):"
 	@echo "  make setup             - install dependencies, create .env from env.example if missing"
-	@echo "  make data              - pull the DVC-versioned data from DagsHub"
+	@echo "  make data              - pull the raw data from DagsHub (DVC) and preprocess it (~1 min)"
 	@echo "  make up                - start the API and the monitoring stack"
 	@echo "  make api / monitoring  - start only one of them"
 	@echo "  make health            - show the API status and the model version it serves"
@@ -108,8 +108,12 @@ setup:
 	uv sync
 	@test -f .env || (cp env.example .env && echo "Created .env: fill in the DagsHub credentials, JWT_SECRET_KEY and API_PASSWORD")
 
+# Pulls only the raw CSVs, then rebuilds data/processed from them, like
+# retrain.yml does. The data/processed recorded in dvc.lock predates later
+# preprocessing changes, so pulling it would bring back stale parquet files.
 data:
-	docker-compose --profile dvc run --rm dvc pull
+	docker-compose --profile dvc run --rm dvc pull data/raw.dvc
+	docker-compose --profile training run --rm training uv run python -m src.data.preprocess
 
 api:
 	docker-compose up -d api
