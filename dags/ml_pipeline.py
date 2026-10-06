@@ -26,7 +26,7 @@ from docker.types import Mount
 # Absolute path of the repo on the Docker host. The containers started by
 # Airflow are siblings, not children: their bind mounts are resolved by the
 # host daemon, so a path inside the Airflow container would not exist.
-# docker-compose sets this from the host shell.
+# Docker Compose sets this from the host shell.
 HOST_PROJECT_DIR = os.environ["HOST_PROJECT_DIR"]
 
 # The images release.yml publishes on every merge to main, same names as in
@@ -42,7 +42,7 @@ DVC_IMAGE = os.environ.get(
 PULL_IMAGES = os.environ.get("PULL_IMAGES", "true").lower() == "true"
 
 # Credentials reach the tasks through the Airflow container's own environment,
-# which docker-compose fills from .env. Nothing is hardcoded here.
+# which Docker Compose fills from .env. Nothing is hardcoded here.
 DAGSHUB_ENV = {
     "MLFLOW_TRACKING_URI": os.environ.get("MLFLOW_TRACKING_URI", ""),
     "MLFLOW_TRACKING_USERNAME": os.environ.get("MLFLOW_TRACKING_USERNAME", ""),

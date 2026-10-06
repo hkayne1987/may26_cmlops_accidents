@@ -86,8 +86,7 @@ def load_reference(n_rows: int = REFERENCE_ROWS) -> pd.DataFrame:
     """A sample of the training data, typed as the model saw it."""
     if not TRAIN_PATH.exists():
         raise FileNotFoundError(
-            f"{TRAIN_PATH} not found: pull the data first "
-            "(docker-compose --profile dvc run --rm dvc pull)"
+            f"{TRAIN_PATH} not found: pull the data first (make data)"
         )
     df = pd.read_parquet(TRAIN_PATH)
     df = df.sample(min(n_rows, len(df)), random_state=RANDOM_STATE)

@@ -269,7 +269,7 @@ def preprocess_all():
     if not years:
         raise FileNotFoundError(
             f"No complete year from {FIRST_YEAR} on in {RAW_DIR}: pull the data "
-            "first (docker-compose --profile dvc run --rm dvc pull)"
+            "first (make data)"
         )
     log.info(f"Years found in {RAW_DIR}: {years}")
 

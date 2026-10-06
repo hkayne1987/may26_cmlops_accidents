@@ -32,7 +32,7 @@ COPY src/ ./src/
 ENV PYTHONPATH=/app
 
 # MLflow connection. MLFLOW_TRACKING_USERNAME/PASSWORD are never baked into
-# the image; inject them at runtime (docker run -e / docker-compose / CI secrets).
+# the image; inject them at runtime (docker run -e / Docker Compose / CI secrets).
 # MLFLOW_TRACKING_URI defaults to the team's DagsHub repo below; override with
 # file:./mlruns (or unset it, see train.py's fallback) to track locally instead.
 ENV MLFLOW_TRACKING_URI=https://dagshub.com/hkayne1987/may26_cmlops_accidents.mlflow
