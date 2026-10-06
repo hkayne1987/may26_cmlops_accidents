@@ -22,6 +22,9 @@ services:
     labels:
       # Lets Watchtower (autoupdate profile) replace it with a newer release.
       - com.centurylinklabs.watchtower.enable=true
+    # Pinned like the other images, so names do not depend on the directory.
+    deploy:
+      replicas: 3
     ports:
       - "8000:8000"
     env_file:
@@ -40,6 +43,15 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  nginx:
+    build:
+      context: .
+      dockerfile: deployment/nginx/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - api
 
   # Training: run on demand, not part of the default stack.
   # Usage: docker compose --profile training run --rm training

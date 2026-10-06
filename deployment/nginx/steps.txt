@@ -1,0 +1,9 @@
+steps:
+- write docker file for nginx
+- write nginx config file
+    - reverse proxy
+    - scalability with docker compose
+    - load balancing
+    - rate limiting
+
+- write docker-compose file for startup
