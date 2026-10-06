@@ -292,3 +292,15 @@ def test_prediction_errors_do_not_leak_internals(client, monkeypatch):
     response = client.post("/predict", json=FEATURES, headers=headers)
     assert response.status_code == 500
     assert "secret" not in response.text
+
+
+# --- OpenAPI example ---------------------------------------------------------
+
+
+def test_swagger_example_keeps_null_values(client):
+    """FastAPI drops nulls from its schema: the example must survive whole."""
+    schema = client.get("/openapi.json").json()
+    features = schema["components"]["schemas"]["PredictRequest"]["properties"]
+    example = features["features"]["examples"][0]
+    assert example == main_module.EXAMPLE_FEATURES
+    assert "occutc" in example and example["occutc"] is None

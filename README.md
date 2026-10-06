@@ -316,7 +316,7 @@ TOKEN=$(curl -s -X POST http://localhost:8000/token \
 curl -X POST http://localhost:8000/predict \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"features": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}'
+  -d @request.json   # a body like the one in Request format above
 ```
 
 Tokens expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (30 by default). Disabling an
