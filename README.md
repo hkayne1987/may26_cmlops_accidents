@@ -75,7 +75,7 @@ carries the hashes (`data/raw.dvc`, `dvc.lock`); the files themselves are
 pulled on demand:
 
 ```bash
-docker-compose --profile dvc run --rm dvc pull
+make data
 ```
 
 Run this once after cloning, and again after any `git pull` that changes
@@ -83,17 +83,19 @@ Run this once after cloning, and again after any `git pull` that changes
 whether you are out of date:
 
 ```bash
-docker-compose --profile dvc run --rm dvc status
+docker compose --profile dvc run --rm dvc status
 ```
 
 This populates `data/raw/` with the 4 tables per year for **2019 to 2024**
-(`caracteristiques`, `lieux`, `vehicules`, `usagers` — 24 files) and
-`data/processed/` with `train.parquet` / `test.parquet`.
+(`caracteristiques`, `lieux`, `vehicules`, `usagers` — 24 files), then
+rebuilds `data/processed/` (`train.parquet` / `test.parquet`) from them. The
+`data/processed/` copy recorded in `dvc.lock` is out of date, so it is not
+pulled.
 
 After regenerating the data, push it back to the remote:
 
 ```bash
-docker-compose --profile dvc run --rm dvc push
+docker compose --profile dvc run --rm dvc push
 ```
 
 The original source is
@@ -166,13 +168,13 @@ The API needs `JWT_SECRET_KEY` there or it refuses to start, see
 [Authentication](#authentication).
 
 ```bash
-docker-compose up -d api             # inference API on http://localhost:8000
+docker compose up -d api             # inference API on http://localhost:8000
 ```
 
 The images are the ones CI publishes on GHCR (see [CI/CD](#cicd)): `up` pulls
-them if they are missing, `docker-compose pull` fetches the latest release.
+them if they are missing, `docker compose pull` fetches the latest release.
 To run local changes instead, build them under the same name with
-`docker-compose build api` (or `up -d --build api`).
+`docker compose build api` (or `up -d --build api`).
 
 The API pulls `models:/xgb_severity@production` from the registry at startup
 (~10-15s), falling back to `models/xgb_severity.joblib` if the registry is
@@ -187,7 +189,7 @@ Training runs on demand rather than as part of the default stack. The image
 carries no data: `data/` is bind-mounted, so pull it first (see [Data](#data)).
 
 ```bash
-docker-compose --profile training run --rm training \
+docker compose --profile training run --rm training \
   uv run python -m src.training.train --sample
 ```
 
@@ -301,7 +303,7 @@ password hashes). Create the first admin from the command line, since
 `/admin/users` is itself admin-only:
 
 ```bash
-docker-compose run --rm api uv run python -m src.api.manage_users create <name> --role admin
+docker compose run --rm api uv run python -m src.api.manage_users create <name> --role admin
 ```
 
 The same script offers `list` and `disable`. The password is prompted rather
@@ -339,13 +341,13 @@ dvc_pull -> preprocess -> train -> evaluate -> promote -> reload_api
 ```
 
 ```bash
-docker-compose --profile airflow up -d     # http://localhost:8080
+docker compose --profile airflow up -d     # http://localhost:8080
 ```
 
 Trigger it from the UI or the command line:
 
 ```bash
-docker-compose --profile airflow exec airflow airflow dags trigger ml_pipeline
+docker compose --profile airflow exec airflow airflow dags trigger ml_pipeline
 ```
 
 `schedule=None`: the pipeline runs only when someone asks. A model change in a
@@ -511,7 +513,7 @@ with the previous model while the new one downloads. `POST
 ### 6. Watchtower updates the running API
 
 ```bash
-docker-compose --profile autoupdate up -d
+docker compose --profile autoupdate up -d
 ```
 
 [Watchtower](https://github.com/nicholas-fedor/watchtower) (the maintained
@@ -530,8 +532,8 @@ The API exposes Prometheus metrics on `/metrics`. Prometheus scrapes it over
 the Docker network, and Grafana shows them on a provisioned dashboard.
 
 ```bash
-docker-compose up -d api
-docker-compose --profile monitoring up -d
+docker compose up -d api
+docker compose --profile monitoring up -d
 ```
 
 | Service | URL | Login |
@@ -601,8 +603,8 @@ than `normal` restricts them to one kind of accident, making the inputs drift
 on purpose:
 
 ```bash
-docker-compose up -d api
-docker-compose --profile monitoring up -d
+docker compose up -d api
+docker compose --profile monitoring up -d
 
 make replay SCENARIO=normal ROWS=500     # ordinary accidents
 make drift                               # -> no drift

@@ -98,10 +98,10 @@ replay:
 # Same job as the daily Airflow DAG. Needs the monitoring profile up so the
 # result reaches the Pushgateway.
 drift:
-	docker-compose --profile drift run --rm drift
+	docker compose --profile drift run --rm drift
 
 # --- Stack -------------------------------------------------------------------
-# Shortcuts over docker-compose, so the whole stack runs with make alone.
+# Shortcuts over Docker Compose, so the whole stack runs with make alone.
 PROFILES = --profile monitoring --profile airflow --profile autoupdate
 
 setup:
@@ -112,29 +112,29 @@ setup:
 # retrain.yml does. The data/processed recorded in dvc.lock predates later
 # preprocessing changes, so pulling it would bring back stale parquet files.
 data:
-	docker-compose --profile dvc run --rm dvc pull data/raw.dvc
-	docker-compose --profile training run --rm training uv run python -m src.data.preprocess
+	docker compose --profile dvc run --rm dvc pull data/raw.dvc
+	docker compose --profile training run --rm training uv run python -m src.data.preprocess
 
 api:
-	docker-compose up -d api
+	docker compose up -d api
 
 health:
 	@curl -s http://localhost:8000/health; echo
 
 monitoring:
-	docker-compose --profile monitoring up -d
+	docker compose --profile monitoring up -d
 
 up: api monitoring
 
 airflow:
-	docker-compose --profile airflow up -d
+	docker compose --profile airflow up -d
 
 # Standalone Airflow generates the admin password when it starts.
 airflow-password:
-	@docker-compose --profile airflow logs airflow | grep "Password for user"
+	@docker compose --profile airflow logs airflow | grep "Password for user"
 
 down:
-	docker-compose $(PROFILES) down
+	docker compose $(PROFILES) down
 
 # Erases what the stack recorded at run time. Keeps the data, the models and
 # the API accounts. The directories stay, only their content goes, because
@@ -145,4 +145,4 @@ clean-state: down
 
 # Removes the images the stack uses; the next start pulls them again.
 clean-images:
-	docker-compose $(PROFILES) down --rmi all
+	docker compose $(PROFILES) down --rmi all
