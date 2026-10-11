@@ -118,13 +118,16 @@ data:
 api:
 	docker compose up -d api
 
+nginx:
+	docker compose up -d nginx
+
 health:
 	@curl -s http://localhost:8000/health; echo
 
 monitoring:
 	docker compose --profile monitoring up -d
 
-up: api monitoring
+up: api monitoring nginx
 
 airflow:
 	docker compose --profile airflow up -d
