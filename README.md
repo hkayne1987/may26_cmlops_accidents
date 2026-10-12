@@ -55,6 +55,7 @@ make users ARGS="create airflow_service --role service"   # password = API_PASSW
 Then, each time:
 
 ```bash
+make update                                   # after a merge: git pull + latest published images
 make up                                       # API on http://localhost (NGINX), Grafana on :3000, Prometheus on :9090
 make health                                   # model loaded, version served
 make replay                                   # send real accidents to the API

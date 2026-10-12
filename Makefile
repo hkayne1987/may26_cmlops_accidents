@@ -1,10 +1,11 @@
 .PHONY: install test lint format typecheck clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate mlflow-ui-local users replay drift \
-	setup data api nginx health monitoring up airflow airflow-password down clean-state clean-images
+	setup update data api nginx health monitoring up airflow airflow-password down clean-state clean-images
 
 help:
 	@echo "Stack (see README, Quick start):"
 	@echo "  make setup             - install dependencies, create .env from env.example if missing"
 	@echo "  make data              - pull the raw data from DagsHub (DVC) and preprocess it (~1 min)"
+	@echo "  make update            - git pull, then download the images CI published (after a merge)"
 	@echo "  make up                - start the API (3 replicas behind NGINX on http://localhost) and the monitoring stack"
 	@echo "  make api / nginx / monitoring - start only one of them"
 	@echo "  make health            - show the API status and the model version it serves"
@@ -124,6 +125,13 @@ monitoring:
 	docker compose --profile monitoring up -d
 
 up: api monitoring nginx
+
+# After a merge: the latest code, and the images release.yml published from
+# it. `make up` alone never re-downloads an image it already has, so without
+# this the stack keeps running the previous version.
+update:
+	git pull
+	docker compose $(PROFILES) --profile dvc --profile training --profile drift pull
 
 airflow:
 	docker compose --profile airflow up -d
