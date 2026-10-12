@@ -54,6 +54,9 @@ with DAG(
     start_date=datetime(2026, 1, 1),
     schedule="@daily",
     catchup=False,
+    # Active as soon as Airflow starts, like ml_pipeline: monitoring that
+    # waits for someone to unpause it in the UI does not monitor anything.
+    is_paused_upon_creation=False,
     tags=["mlops", "monitoring"],
 ) as dag:
     DockerOperator(
