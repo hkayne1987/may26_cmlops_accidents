@@ -29,13 +29,17 @@ from evidently.presets import DataDriftPreset
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 
 from src.api.prediction_log import load_predictions
-from src.data.preprocess import build_feature_matrix
+from src.data.preprocess import feature_frame
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
 log = logging.getLogger(__name__)
 
+# The reference is the data the production model was trained on. Airflow's
+# ml_pipeline trains in its own clone of main, so its training set comes first;
+# the local one is the fallback, before Airflow has trained anything.
+PIPELINE_TRAIN_PATH = Path("airflow_data/workspace/data/processed/train.parquet")
 TRAIN_PATH = Path("data/processed/train.parquet")
 REPORT_DIR = Path("reports/drift")
 
@@ -82,15 +86,21 @@ class DriftResult:
         return self.enough_data and self.drift_share >= ALERT_SHARE
 
 
+def reference_path() -> Path:
+    """The training set to compare with: Airflow's if it exists, else the local."""
+    for path in (PIPELINE_TRAIN_PATH, TRAIN_PATH):
+        if path.exists():
+            return path
+    raise FileNotFoundError(f"{TRAIN_PATH} not found: pull the data first (make data)")
+
+
 def load_reference(n_rows: int = REFERENCE_ROWS) -> pd.DataFrame:
     """A sample of the training data, typed as the model saw it."""
-    if not TRAIN_PATH.exists():
-        raise FileNotFoundError(
-            f"{TRAIN_PATH} not found: pull the data first (make data)"
-        )
-    df = pd.read_parquet(TRAIN_PATH)
+    path = reference_path()
+    log.info(f"Reference: {path}")
+    df = pd.read_parquet(path)
     df = df.sample(min(n_rows, len(df)), random_state=RANDOM_STATE)
-    X, _, _ = build_feature_matrix(df)
+    X = feature_frame(df)
     return X
 
 

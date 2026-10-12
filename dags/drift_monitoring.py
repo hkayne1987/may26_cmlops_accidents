@@ -4,10 +4,9 @@ Runs src/monitoring/detection.py in the training image: it compares the
 requests logged over the last days with the training data and pushes the
 result to the Prometheus Pushgateway, where Grafana shows it.
 
-Scheduled, unlike ml_pipeline: this DAG only measures and never touches the
-served model, so running it unattended is safe. A drift alert calls for a
-human look, not an automatic retrain: retraining needs new labelled data,
-which BAAC releases once a year.
+This DAG only measures and never touches the served model, so running it
+unattended is safe. A drift alert calls for a human look, not an automatic
+retrain: retraining needs new labelled data, which BAAC releases once a year.
 """
 
 import os
@@ -64,8 +63,17 @@ with DAG(
         image=TRAINING_IMAGE,
         command="uv run python -m src.monitoring.detection",
         mounts=[
-            # Reads the prediction log and the training data...
+            # Reads the prediction log and the local training data...
             Mount(target="/app/data", source=f"{HOST_PROJECT_DIR}/data", type="bind"),
+            # ...or, once ml_pipeline has run, the data it trained on, in its
+            # clone of main. The parent directory is mounted because it always
+            # exists, which the workspace does not before the first run.
+            Mount(
+                target="/app/airflow_data",
+                source=f"{HOST_PROJECT_DIR}/airflow_data",
+                type="bind",
+                read_only=True,
+            ),
             # ...and writes the Evidently HTML report.
             Mount(
                 target="/app/reports",

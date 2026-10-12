@@ -21,7 +21,7 @@ from typing import Any
 
 import pandas as pd
 
-from src.data.preprocess import build_feature_matrix
+from src.data.preprocess import feature_frame
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -47,7 +47,7 @@ SCENARIOS: dict[str, tuple[str, Any]] = {
 
 def select_rows(scenario: str, n_rows: int, seed: int = 0) -> pd.DataFrame:
     """Picks test-set rows for the scenario, typed as the model sees them."""
-    X, _, _ = build_feature_matrix(pd.read_parquet(TEST_PATH))
+    X = feature_frame(pd.read_parquet(TEST_PATH))
     column, values = SCENARIOS[scenario]
     if column:
         X = X[X[column].astype(str).isin(values)]
