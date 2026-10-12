@@ -29,9 +29,6 @@ help:
 install:
 	uv sync
 
-install-dev:
-	uv sync
-
 test:
 	uv run pytest tests/ -v
 

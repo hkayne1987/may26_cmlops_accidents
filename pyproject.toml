@@ -1,5 +1,5 @@
 [project]
-name = "mlops-project-template"
+name = "baac-severity"
 version = "0.1.0"
 description = "Road accident severity prediction (BAAC): training pipeline and inference API"
 readme = "README.md"
