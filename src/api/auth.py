@@ -186,6 +186,37 @@ def create_user(session: Session, username: str, password: str, role: Role) -> U
     return user
 
 
+def _existing_user(session: Session, username: str) -> User:
+    user = session.get(User, username)
+    if user is None:
+        raise ValueError(f"User {username!r} not found")
+    return user
+
+
+def set_password(session: Session, username: str, password: str) -> User:
+    """Replaces a user's password. Raises ValueError if unknown or too short.
+
+    Tokens already issued stay valid until they expire: disable the account
+    as well to cut access at once.
+    """
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    user = _existing_user(session, username)
+    user.hashed_password = hash_password(password)
+    session.commit()
+    log.info(f"Password reset for {username}")
+    return user
+
+
+def set_active(session: Session, username: str, active: bool) -> User:
+    """Enables or disables an account. Raises ValueError if unknown."""
+    user = _existing_user(session, username)
+    user.is_active = active
+    session.commit()
+    log.info(f"Account {username} {'enabled' if active else 'disabled'}")
+    return user
+
+
 def authenticate_user(session: Session, username: str, password: str) -> User | None:
     """Returns the user when the credentials are valid, else None."""
     user = session.get(User, username)

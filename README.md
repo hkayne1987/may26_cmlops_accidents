@@ -322,7 +322,7 @@ password hashes). Create the first admin from the command line, since
 docker compose run --rm api uv run python -m src.api.manage_users create <name> --role admin
 ```
 
-The same script offers `list` and `disable`. The password is prompted rather
+The same script offers `list`, `reset-password`, `disable` and `enable`. The password is prompted rather
 than passed as an argument, so it stays out of the shell history.
 
 Log in, then send the token on every call:
