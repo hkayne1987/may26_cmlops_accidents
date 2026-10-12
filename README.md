@@ -353,22 +353,38 @@ already ships with, so Airflow adds orchestration without duplicating a single
 dependency:
 
 ```
-dvc_pull -> preprocess -> train -> evaluate -> promote -> reload_api
+check_new_data -> sync_main -> dvc_pull -> preprocess -> train -> evaluate -> promote -> reload_api
 ```
 
 ```bash
-docker compose --profile airflow up -d     # http://localhost:8080
+make airflow                               # http://localhost:8080
+make airflow-password                      # admin password, new at each start
 ```
 
-Trigger it from the UI or the command line:
+It runs **every day** and retrains only when the data on `main` changed:
+`check_new_data` compares the DVC hash in `data/raw.dvc` on GitHub with the
+`data_version` of the latest registered model, and skips every other task when
+they match. The latest model rather than the production one: a model the
+release gate rejected keeps production on older data, and comparing against
+production would retrain on the same data every day. Daily is soon enough
+for data that changes a few times a year; trigger the DAG by hand to retrain
+at once.
+
+A manual trigger always runs the whole chain:
 
 ```bash
 docker compose --profile airflow exec airflow airflow dags trigger ml_pipeline
 ```
 
-`schedule=None`: the pipeline runs only when someone asks. A model change in a
-service used by emergency call centres should be a decision, not the side
-effect of a nightly job.
+The pipeline works on its own clone of `main`, in `airflow_data/workspace`
+(gitignored), never on the developer's checkout: it trains on reviewed data,
+with the code release.yml published from the same branch. Your local
+`data/` is left alone; after new data is merged, `git pull && make data`
+brings it up to date for `make replay` and `make drift`.
+
+Both DAGs are active as soon as Airflow starts (`is_paused_upon_creation`).
+Retraining only happens while Airflow runs: when it is down, new data waits
+for the next start, or `retrain.yml` can be run by hand from GitHub Actions.
 
 ### The release gate
 
@@ -447,8 +463,8 @@ Docker Hub organisations are a paid feature.
 The packages are public: anyone can pull them without logging in.
 
 **`ingest.yml`** runs on the 1st of each month and checks data.gouv.fr for new
-or corrected BAAC files. **`retrain.yml`** runs when `data/raw.dvc` changes on
-`main`. Both are described below.
+or corrected BAAC files. **`retrain.yml`** retrains by hand, as a fallback for
+when Airflow is not running. Both are described below.
 
 ### Secrets they need
 
@@ -476,7 +492,7 @@ human decision in the middle:
 | 1. Detection | `ingest.yml`, monthly | compares data.gouv.fr with `data/sources.json` |
 | 2. Ingestion | `ingest.yml` | downloads new or corrected files, versions them on DagsHub with DVC |
 | 3. Review | pull request | a human checks the new data and merges, or not |
-| 4. Retraining | `retrain.yml`, on merge | dvc pull, preprocess, train, evaluate, release gate |
+| 4. Retraining | Airflow `ml_pipeline`, within a day | sees the new data on `main`, then dvc pull, preprocess, train, evaluate, release gate |
 | 5. Model update | the API | sees `@production` move in the registry and reloads, no restart |
 | 6. Code update | Watchtower | replaces the running API when CI publishes a new image |
 
@@ -513,11 +529,16 @@ Two things to know:
 
 ### 4. Retraining
 
-`retrain.yml` runs the same steps as the Airflow `ml_pipeline` DAG, on the
-GitHub runner. Each run logs the data version (`raw:<md5 of data/raw>`) to
-MLflow. A model that falls short of the [release gate](#the-release-gate) fails
-the run and never reaches production. It can also be started by hand from the
-Actions tab.
+The Airflow `ml_pipeline` DAG checks every day whether the data on `main`
+changed, and retrains when it did (see
+[Orchestration](#orchestration-airflow)). Each run logs the data version
+(`raw:<md5 of data/raw>`) to MLflow. A model that falls short of the
+[release gate](#the-release-gate) fails the run and never reaches production.
+
+Retraining runs in Airflow rather than in GitHub Actions because GitHub-hosted
+jobs stop after 6 hours and have no GPU: fine for this dataset, not for a
+larger one. `retrain.yml` runs the same steps on a GitHub runner, started by
+hand from the Actions tab, for when Airflow is down.
 
 ### 5. The API follows the registry
 
@@ -608,7 +629,7 @@ process is:
 | Signal | When | Response |
 |---|---|---|
 | Drift in the requests | any day | alert in Grafana, a human looks at what changed |
-| New BAAC year versioned with DVC | once a year | run `ml_pipeline`; `promote` only releases a model that clears the metric gate |
+| New BAAC year merged on `main` | once a year | `ml_pipeline` retrains within a day; `promote` only releases a model that clears the metric gate |
 | Manual decision | any time | run `ml_pipeline` by hand |
 
 #### Trying it out
