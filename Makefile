@@ -1,4 +1,4 @@
-.PHONY: install test lint format clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate mlflow-ui-local users replay drift \
+.PHONY: install test lint format typecheck clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate mlflow-ui-local users replay drift \
 	setup data api nginx health monitoring up airflow airflow-password down clean-state clean-images
 
 help:
@@ -33,10 +33,10 @@ test:
 	uv run pytest tests/ -v
 
 lint:
-	uv run ruff check src/
+	uv run ruff check src/ tests/ dags/
 
 format:
-	uv run ruff format src/ tests/
+	uv run ruff format src/ tests/ dags/
 
 typecheck:
 	uv run mypy src/
