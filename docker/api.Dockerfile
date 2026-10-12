@@ -1,5 +1,5 @@
-# FastAPI Inference Service Dockerfile
-# Phase 1: Containerized inference API
+# Inference API image (src/api). The model is not baked in: the API pulls it
+# from the MLflow registry at startup, or reads the models/ volume as fallback.
 
 FROM python:3.10-slim
 
@@ -23,11 +23,6 @@ ENV UV_NO_SYNC=1
 
 # Copy source after dependency install (changes more often)
 COPY src/ ./src/
-
-# Copy models after install (they change more often).
-# Only used as a fallback: the API pulls the production model from the
-# MLflow registry at startup when MLFLOW_TRACKING_URI is set.
-COPY models/ ./models/
 
 # Set PYTHONPATH so imports work (src.api becomes importable)
 ENV PYTHONPATH=/app

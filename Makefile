@@ -108,9 +108,8 @@ setup:
 	uv sync
 	@test -f .env || (cp env.example .env && echo "Created .env: fill in the DagsHub credentials, JWT_SECRET_KEY and API_PASSWORD")
 
-# Pulls only the raw CSVs, then rebuilds data/processed from them, like
-# retrain.yml does. The data/processed recorded in dvc.lock predates later
-# preprocessing changes, so pulling it would bring back stale parquet files.
+# Pulls the raw CSVs from DagsHub, then rebuilds data/processed from them:
+# only data/raw is versioned with DVC, the parquet files are always derived.
 data:
 	docker compose --profile dvc run --rm dvc pull data/raw.dvc
 	docker compose --profile training run --rm training uv run python -m src.data.preprocess

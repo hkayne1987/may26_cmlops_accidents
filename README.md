@@ -71,7 +71,7 @@ Docker images. Neither touches the data, the models or the API accounts.
 ## Data
 
 The BAAC data is versioned with DVC on DagsHub, not stored in Git. Git only
-carries the hashes (`data/raw.dvc`, `dvc.lock`); the files themselves are
+carries the hash of `data/raw` (`data/raw.dvc`); the files themselves are
 pulled on demand:
 
 ```bash
@@ -79,7 +79,7 @@ make data
 ```
 
 Run this once after cloning, and again after any `git pull` that changes
-`dvc.lock` or a `.dvc` file. It is never automatic — `dvc status` tells you
+`data/raw.dvc`. It is never automatic — `dvc status` tells you
 whether you are out of date:
 
 ```bash
@@ -88,9 +88,9 @@ docker compose --profile dvc run --rm dvc status
 
 This populates `data/raw/` with the 4 tables per year for **2019 to 2024**
 (`caracteristiques`, `lieux`, `vehicules`, `usagers` — 24 files), then
-rebuilds `data/processed/` (`train.parquet` / `test.parquet`) from them. The
-`data/processed/` copy recorded in `dvc.lock` is out of date, so it is not
-pulled.
+rebuilds `data/processed/` (`train.parquet` / `test.parquet`) from them.
+Only the raw data is versioned: the parquet files are always derived from it,
+and the model lives in the MLflow registry.
 
 After regenerating the data, push it back to the remote:
 
