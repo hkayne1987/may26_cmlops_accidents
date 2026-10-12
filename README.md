@@ -6,8 +6,8 @@ public BAAC dataset. The goal is to expose a trained classifier through an API;
 the focus of the project is on the MLOps lifecycle (reproducible pipeline,
 deployment, monitoring) rather than on modeling performance.
 
-**Target:** binary classification — `grave` (killed or hospitalized) vs
-`non grave` (unharmed or slightly injured).
+**Target:** binary classification — `severe` (killed or hospitalized) vs
+`non_severe` (unharmed or slightly injured).
 **Scope:** BAAC 2019–2024 (homogeneous schema after the 2019 TRAxy reform).
 **Grain:** one row per road user involved in an accident.
 

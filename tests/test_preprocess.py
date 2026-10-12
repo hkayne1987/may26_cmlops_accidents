@@ -90,11 +90,11 @@ def test_build_target_filters_and_labels():
     out = preprocess.build_target(df)
     # Should remove the -1 row
     assert (out["grav"] == "-1").sum() == 0
-    # grave should be 1 for 2 and 3
-    assert out.loc[out["grav"] == "2", "grave"].iloc[0] == 1
-    assert out.loc[out["grav"] == "3", "grave"].iloc[0] == 1
+    # severe should be 1 for 2 and 3
+    assert out.loc[out["grav"] == "2", "severe"].iloc[0] == 1
+    assert out.loc[out["grav"] == "3", "severe"].iloc[0] == 1
     # and 0 otherwise
-    assert out.loc[out["grav"] == "0", "grave"].iloc[0] == 0
+    assert out.loc[out["grav"] == "0", "severe"].iloc[0] == 0
 
 
 def test_engineer_features_time():
@@ -113,14 +113,14 @@ def test_build_feature_matrix_types_and_groups():
     df = pd.DataFrame(
         {
             "Num_Acc": [1, 1],
-            "grave": [0, 1],
+            "severe": [0, 1],
             "age": [30, 40],
             "heure": ["12", "13"],
             "grav": ["0", "1"],
         }
     )
     X, y, groups = preprocess.build_feature_matrix(df)
-    # y is grave
+    # y is severe
     assert list(y.values) == [0, 1]
     # groups is Num_Acc
     assert list(groups.values) == [1, 1]
@@ -131,7 +131,7 @@ def test_build_feature_matrix_types_and_groups():
 
 def test_split_train_test_no_overlap(monkeypatch):
     # Create df with two accidents each with two usagers
-    df = pd.DataFrame({"Num_Acc": [1, 1, 2, 2], "grave": [0, 1, 0, 1]})
+    df = pd.DataFrame({"Num_Acc": [1, 1, 2, 2], "severe": [0, 1, 0, 1]})
 
     # Force a simple splitter that keeps accidents together
     class SimpleSplitter:
@@ -149,7 +149,7 @@ def test_split_train_test_no_overlap(monkeypatch):
 
 
 def test_split_train_test_overlap_raises(monkeypatch):
-    df = pd.DataFrame({"Num_Acc": [1, 2, 3], "grave": [0, 1, 0]})
+    df = pd.DataFrame({"Num_Acc": [1, 2, 3], "severe": [0, 1, 0]})
 
     class BadSplitter:
         def __init__(self, n_splits, test_size, random_state):
@@ -167,7 +167,7 @@ def test_split_train_test_overlap_raises(monkeypatch):
 
 def test_preprocess_all_uses_pipeline(monkeypatch, tmp_path):
     # Monkeypatch the sub-steps to avoid heavy IO
-    df_sample = pd.DataFrame({"Num_Acc": [1, 1], "grave": [0, 1]})
+    df_sample = pd.DataFrame({"Num_Acc": [1, 1], "severe": [0, 1]})
 
     monkeypatch.setattr(preprocess, "discover_years", lambda: [2022])
     monkeypatch.setattr(
@@ -181,7 +181,7 @@ def test_preprocess_all_uses_pipeline(monkeypatch, tmp_path):
         },
     )
     monkeypatch.setattr(preprocess, "merge_tables", lambda tables: df_sample)
-    monkeypatch.setattr(preprocess, "build_target", lambda df: df.assign(grave=[0, 1]))
+    monkeypatch.setattr(preprocess, "build_target", lambda df: df.assign(severe=[0, 1]))
     monkeypatch.setattr(preprocess, "engineer_features", lambda df: df)
 
     # Prevent actual file writes by overriding the output paths and
