@@ -29,9 +29,10 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 TEST_PATH = Path("data/processed/test.parquet")
-# Not read from API_URL: that variable is Airflow's address for the API inside
-# the Docker network (http://api:8000), unreachable from the host.
-DEFAULT_URL = "http://localhost:8000"
+# The API as the host sees it: through NGINX on port 80. Not read from
+# API_URL: that variable is Airflow's address for the API inside the Docker
+# network (http://api:8000), unreachable from the host.
+DEFAULT_URL = "http://localhost"
 
 # Each scenario keeps one kind of accident. "normal" keeps everything, so the
 # requests look like the training data and should not drift.
