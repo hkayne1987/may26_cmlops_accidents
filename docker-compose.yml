@@ -22,8 +22,12 @@ services:
     labels:
       # Lets Watchtower (autoupdate profile) replace it with a newer release.
       - com.centurylinklabs.watchtower.enable=true
-    ports:
-      - "8000:8000"
+    # Three instances behind NGINX, which spreads the requests between them.
+    # Not published on the host: NGINX on port 80 is the only way in.
+    deploy:
+      replicas: 3
+    expose:
+      - "8000"
     env_file:
       - .env
     volumes:
@@ -40,6 +44,19 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # Reverse proxy, the single entry point to the API on http://localhost.
+  # Spreads requests over the api replicas, keeps /metrics internal and
+  # rate-limits logins, see deployment/nginx/nginx.conf.
+  nginx:
+    # Pinned rather than latest, like every other image in this stack.
+    image: nginx:1.30.5-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./deployment/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
 
   # Training: run on demand, not part of the default stack.
   # Usage: docker compose --profile training run --rm training

@@ -46,7 +46,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "api_model_version_info",
+          "expr": "max by (model_version) (api_model_version_info)",
           "legendFormat": "v{{model_version}}",
           "instant": true
         }
@@ -82,7 +82,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "api_model_loaded",
+          "expr": "min(api_model_loaded)",
           "instant": true
         }
       ],
@@ -494,7 +494,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "api_model_load_duration_seconds",
+          "expr": "max(api_model_load_duration_seconds)",
           "instant": true
         }
       ],

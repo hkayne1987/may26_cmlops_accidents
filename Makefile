@@ -1,12 +1,12 @@
 .PHONY: install test lint format clean help preprocess train train-sample tune tune-sample evaluate preprocess-train-evaluate mlflow-ui-local users replay drift \
-	setup data api health monitoring up airflow airflow-password down clean-state clean-images
+	setup data api nginx health monitoring up airflow airflow-password down clean-state clean-images
 
 help:
 	@echo "Stack (see README, Quick start):"
 	@echo "  make setup             - install dependencies, create .env from env.example if missing"
 	@echo "  make data              - pull the raw data from DagsHub (DVC) and preprocess it (~1 min)"
-	@echo "  make up                - start the API and the monitoring stack"
-	@echo "  make api / monitoring  - start only one of them"
+	@echo "  make up                - start the API (3 replicas behind NGINX on http://localhost) and the monitoring stack"
+	@echo "  make api / nginx / monitoring - start only one of them"
 	@echo "  make health            - show the API status and the model version it serves"
 	@echo "  make airflow           - start Airflow on http://localhost:8080"
 	@echo "  make airflow-password  - print the Airflow admin password"
@@ -118,13 +118,16 @@ data:
 api:
 	docker compose up -d api
 
+nginx:
+	docker compose up -d nginx
+
 health:
-	@curl -s http://localhost:8000/health; echo
+	@curl -sf http://localhost/health && echo || echo "API not ready yet, retry in a few seconds"
 
 monitoring:
 	docker compose --profile monitoring up -d
 
-up: api monitoring
+up: api monitoring nginx
 
 airflow:
 	docker compose --profile airflow up -d

@@ -55,7 +55,7 @@ make users ARGS="create airflow_service --role service"   # password = API_PASSW
 Then, each time:
 
 ```bash
-make up                                       # API on :8000, Grafana on :3000, Prometheus on :9090
+make up                                       # API on http://localhost (NGINX), Grafana on :3000, Prometheus on :9090
 make health                                   # model loaded, version served
 make replay                                   # send real accidents to the API
 make drift                                    # data drift check, result in Grafana
@@ -168,7 +168,7 @@ The API needs `JWT_SECRET_KEY` there or it refuses to start, see
 [Authentication](#authentication).
 
 ```bash
-docker compose up -d api             # inference API on http://localhost:8000
+docker compose up -d api nginx       # 3 API replicas behind NGINX on http://localhost
 ```
 
 The images are the ones CI publishes on GHCR (see [CI/CD](#cicd)): `up` pulls
@@ -181,7 +181,7 @@ The API pulls `models:/xgb_severity@production` from the registry at startup
 unreachable. Check which model it loaded with:
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost/health
 # {"status":"healthy","model_loaded":true,"model_version":"2"}
 ```
 
@@ -200,6 +200,22 @@ release gate, and the API then picks it up on its own within 5 minutes, see
 Prometheus and Grafana sit behind a `monitoring` profile, see
 [Monitoring](#monitoring).
 
+### Reverse proxy (NGINX)
+
+The API runs as three replicas that are not published on the host: NGINX
+(`deployment/nginx/nginx.conf`) is the single entry point, on
+`http://localhost` (port 80). It:
+
+- spreads the requests over the replicas in turn, re-resolving them through
+  Docker's DNS so recreated replicas are picked up;
+- answers 404 on `/metrics`, which Prometheus reads directly over the Docker
+  network (it scrapes every replica, see `deployment/prometheus/prometheus.yml`);
+- limits `/token` to 10 login attempts per minute per address (burst of 5),
+  then answers 429, to slow down password guessing.
+
+Swagger is therefore on `http://localhost/docs`. Inside the Docker network,
+Airflow still calls `http://api:8000` directly.
+
 ## API
 Run the API
 Test the API Internally
@@ -207,7 +223,7 @@ Start the API locally with:
 ```bash
 uv run uvicorn src.api.main:app --reload
 
-## Once started, the API will be available at:
+## Once started, the API will be available at (in Docker: http://localhost, through NGINX):
 API: http://localhost:8000
 Interactive documentation (Swagger UI): http://localhost:8000/docs
 ReDoc documentation: http://localhost:8000/redoc
@@ -312,10 +328,10 @@ than passed as an argument, so it stays out of the shell history.
 Log in, then send the token on every call:
 
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8000/token \
+TOKEN=$(curl -s -X POST http://localhost/token \
   -d "username=<name>&password=<password>" | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -X POST http://localhost:8000/predict \
+curl -X POST http://localhost/predict \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d @request.json   # a body like the one in Request format above
@@ -559,8 +575,8 @@ Routes are labelled by template (`/admin/users/{username}`), never by raw path,
 so the number of time series stays bounded.
 
 `/metrics` is unauthenticated because only Prometheus reads it, from inside
-the Docker network. **It must not be exposed publicly**: the reverse proxy
-should not forward it.
+the Docker network. **It must not be exposed publicly**: NGINX answers 404 on
+it.
 
 ### Data drift
 
