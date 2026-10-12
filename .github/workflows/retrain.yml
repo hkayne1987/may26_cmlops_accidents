@@ -1,8 +1,11 @@
 name: Retrain
 
-# Retrains the model when the data version changes on main, typically when a
-# pull request opened by ingest.yml is merged. Same steps as the Airflow DAG
-# ml_pipeline, run on the GitHub runner against the DagsHub registry:
+# Manual fallback for retraining, run on a GitHub runner against the DagsHub
+# registry. Retraining normally happens in Airflow: the ml_pipeline DAG checks
+# every day whether the data on main changed (typically after a pull request
+# opened by ingest.yml is merged) and retrains then. GitHub-hosted jobs stop
+# after 6 hours and have no GPU, so the regular path stays in Airflow; this
+# workflow covers the times Airflow is not running.
 #
 #   dvc pull -> preprocess -> train -> evaluate -> promote
 #
@@ -12,13 +15,9 @@ name: Retrain
 # promoted model by itself (it polls the registry), so there is no reload step.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - data/raw.dvc
   workflow_dispatch:
 
-# A newer data version supersedes a retrain still in progress.
+# A newer run supersedes one still in progress.
 concurrency:
   group: retrain
   cancel-in-progress: true
