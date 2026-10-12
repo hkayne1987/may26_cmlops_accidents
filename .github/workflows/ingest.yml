@@ -2,8 +2,9 @@ name: Data ingestion
 
 # Checks data.gouv.fr for new or corrected BAAC files. When something changed,
 # downloads it, versions it with DVC on DagsHub and opens a pull request.
-# Merging that pull request is what triggers retraining (retrain.yml): a human
-# reviews new data before any model is trained on it.
+# Merging that pull request is what triggers retraining: the Airflow
+# ml_pipeline DAG sees the new data on main within a day. A human reviews
+# new data before any model is trained on it.
 #
 # Monthly: a new BAAC year comes out once a year, around October, and past
 # years are corrected at any time. A yearly check could miss either.
@@ -88,8 +89,10 @@ jobs:
             ${{ steps.ingest.outputs.summary }}
 
             They are already versioned on DagsHub (`data/raw.dvc`).
-            **Merging this pull request starts retraining** (`retrain.yml`);
-            the new model only reaches production if it clears the release
+            **Merging this pull request starts retraining**: the Airflow
+            `ml_pipeline` DAG picks up the new data on main within a day
+            (trigger it by hand in Airflow to retrain at once).
+            The new model only reaches production if it clears the release
             gate in `src/training/promote.py`.
 
             Worth checking before merging: the file format may change between
