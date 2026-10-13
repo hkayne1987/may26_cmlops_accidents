@@ -89,8 +89,8 @@ services:
     env_file:
       - .env
     volumes:
-      # The whole repo: DVC needs .dvc/, dvc.yaml and dvc.lock, and writes
-      # pulled data back to the host.
+      # The whole repo: DVC needs .dvc/ and data/raw.dvc, and writes pulled
+      # data back to the host.
       - .:/app
     profiles:
       - dvc
@@ -195,6 +195,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./reports:/app/reports
+      # The data Airflow's ml_pipeline trained on, the preferred reference.
+      - ./airflow_data:/app/airflow_data:ro
     profiles:
       - drift
 

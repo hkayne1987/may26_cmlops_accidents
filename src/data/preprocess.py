@@ -60,8 +60,6 @@ NUMERIC_FEATURES = [
     "an",
     "vma",
     "nbv",
-    "lartpc",
-    "larrout",
     "occutc",
     "lat",
     "long",
@@ -70,7 +68,7 @@ NUMERIC_FEATURES = [
 # Columns to exclude from features (target, identifiers, free text, redundancies)
 DROP_COLS = [
     "grav",
-    "grave",
+    "severe",
     "Num_Acc",
     "id_usager",
     "id_vehicule",
@@ -167,24 +165,25 @@ def merge_tables(tables: dict[str, pd.DataFrame]):
 
 
 def build_target(df: pd.DataFrame):
-    """Creates the binary target 'grave' covering the initial targets
-    killed (2) and hospitalized (3).
+    """Creates the binary target 'severe': 1 for killed (grav 2) or
+    hospitalized (grav 3), 0 (non_severe) for unharmed or slightly injured.
 
     Removes users with no recorded severity (grav = -1).
     """
-    n_avant = len(df)
+    n_before = len(df)
     df = df[df["grav"] != "-1"].copy()
-    log.info(f"build_target | removed (grav=-1): {n_avant - len(df)}")
+    log.info(f"build_target | removed (grav=-1): {n_before - len(df)}")
 
-    df["grave"] = df["grav"].isin(["2", "3"]).astype(int)
-    taux = df["grave"].mean()
-    log.info(f"build_target | proportion 'severe': {taux:.1%}")
+    df["severe"] = df["grav"].isin(["2", "3"]).astype(int)
+    log.info(f"build_target | proportion 'severe': {df['severe'].mean():.1%}")
     return df
 
 
 def engineer_features(df: pd.DataFrame):
-    """Creates date/time features, then applies the column types
-    (numeric vs categorical) expected by XGBoost.
+    """Creates the time features: hour and minute, split from hrmn ("HH:MM").
+
+    The column types XGBoost expects are applied later, in
+    build_feature_matrix.
     """
 
     df = df.copy()
@@ -201,12 +200,19 @@ def build_feature_matrix(df: pd.DataFrame):
 
     Returns (X, y, groups):
       - X: features (numeric + categorical)
-      - y: target 'grave'
+      - y: target 'severe'
       - groups: Num_Acc (for grouped split at training time)
     """
-    y = df["grave"]
-    groups = df["Num_Acc"]
+    X = feature_frame(df)
+    return X, df["severe"], df["Num_Acc"]
 
+
+def feature_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """The model's input columns, typed: numeric ones as floats, the rest as is.
+
+    Needs no target column, so drift detection and request replay can use it
+    on any preprocessed file.
+    """
     feature_cols = [c for c in df.columns if c not in DROP_COLS]
     X = df[feature_cols].copy()
 
@@ -223,11 +229,11 @@ def build_feature_matrix(df: pd.DataFrame):
                 X[c] = pd.to_numeric(X[c], errors="coerce")
 
     log.info(
-        f"build_feature_matrix | X={X.shape}, "
+        f"feature_frame | X={X.shape}, "
         f"{len(categorical_features)} categorical, "
         f"{len([c for c in NUMERIC_FEATURES if c in X.columns])} numeric"
     )
-    return X, y, groups
+    return X
 
 
 def split_train_test(df: pd.DataFrame):
@@ -240,7 +246,7 @@ def split_train_test(df: pd.DataFrame):
     splitter = GroupShuffleSplit(
         n_splits=1, test_size=TEST_SIZE, random_state=RANDOM_STATE
     )
-    train_idx, test_idx = next(splitter.split(df, df["grave"], groups=groups))
+    train_idx, test_idx = next(splitter.split(df, df["severe"], groups=groups))
 
     df_train = df.iloc[train_idx].reset_index(drop=True)
     df_test = df.iloc[test_idx].reset_index(drop=True)
@@ -255,8 +261,8 @@ def split_train_test(df: pd.DataFrame):
         f"/ test {len(df_test)} users ({df_test['Num_Acc'].nunique()} acc.)"
     )
     log.info(
-        f"Split | proportion 'severe' — train {df_train['grave'].mean():.1%} "
-        f"/ test {df_test['grave'].mean():.1%}"
+        f"Split | proportion 'severe' — train {df_train['severe'].mean():.1%} "
+        f"/ test {df_test['severe'].mean():.1%}"
     )
     return df_train, df_test
 

@@ -24,6 +24,7 @@ from sklearn.metrics import (
 )
 
 from src.data.preprocess import build_feature_matrix
+from src.training.train import DECISION_THRESHOLD
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -34,10 +35,8 @@ log = logging.getLogger(__name__)
 TEST_PATH = Path("data/processed/test.parquet")
 MODEL_PATH = Path("models/xgb_severity.joblib")
 RUN_ID_PATH = Path("models/run_id.txt")  # written by train.py
-# Favours recall on the severe class: missing a severe accident costs more
-# than over-flagging a minor one. Picked from threshold_search on the tuned
-# model (recall 0.896, precision 0.380), near the F2 optimum.
-DECISION_THRESHOLD = 0.35
+# DECISION_THRESHOLD is defined once, in train.py, which also records it on
+# each registered version for the API.
 
 
 def load_test() -> pd.DataFrame:

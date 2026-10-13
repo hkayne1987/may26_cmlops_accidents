@@ -6,7 +6,9 @@ admin-only, so the database would otherwise stay empty and unusable.
 Usage:
     python -m src.api.manage_users create <username> --role admin
     python -m src.api.manage_users list
+    python -m src.api.manage_users reset-password <username>
     python -m src.api.manage_users disable <username>
+    python -m src.api.manage_users enable <username>
 
 The password is read interactively so it never lands in the shell history.
 """
@@ -19,7 +21,15 @@ import sys
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.api.auth import MIN_PASSWORD_LENGTH, Role, User, create_user, get_engine
+from src.api.auth import (
+    MIN_PASSWORD_LENGTH,
+    Role,
+    User,
+    create_user,
+    get_engine,
+    set_active,
+    set_password,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -59,14 +69,22 @@ def cmd_list(args) -> None:
             print(f"{u.username:20s} {u.role:10s} {state}")
 
 
-def cmd_disable(args) -> None:
+def cmd_reset_password(args) -> None:
     with Session(get_engine()) as session:
-        user = session.get(User, args.username)
-        if user is None:
-            sys.exit(f"User {args.username!r} not found")
-        user.is_active = False
-        session.commit()
-        print(f"Disabled {user.username}")
+        try:
+            set_password(session, args.username, prompt_password())
+        except ValueError as e:
+            sys.exit(str(e))
+        print(f"Password reset for {args.username}")
+
+
+def cmd_set_active(args) -> None:
+    with Session(get_engine()) as session:
+        try:
+            set_active(session, args.username, args.active)
+        except ValueError as e:
+            sys.exit(str(e))
+        print(f"{'Enabled' if args.active else 'Disabled'} {args.username}")
 
 
 def main() -> None:
@@ -83,9 +101,17 @@ def main() -> None:
     p_list = sub.add_parser("list", help="list users")
     p_list.set_defaults(func=cmd_list)
 
+    p_reset = sub.add_parser("reset-password", help="set a new password")
+    p_reset.add_argument("username")
+    p_reset.set_defaults(func=cmd_reset_password)
+
     p_disable = sub.add_parser("disable", help="disable a user")
     p_disable.add_argument("username")
-    p_disable.set_defaults(func=cmd_disable)
+    p_disable.set_defaults(func=cmd_set_active, active=False)
+
+    p_enable = sub.add_parser("enable", help="enable a disabled user")
+    p_enable.add_argument("username")
+    p_enable.set_defaults(func=cmd_set_active, active=True)
 
     args = parser.parse_args()
     args.func(args)

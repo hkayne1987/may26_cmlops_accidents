@@ -1,7 +1,12 @@
-"""
-FastAPI Inference Service
+"""Inference API for the accident severity model.
 
-Phase 1 deliverable: Basic inference API for ML model serving.
+Serves the model behind the 'production' alias of the MLflow registry, behind
+JWT authentication, and reloads it on its own when the alias moves. Runs as
+several replicas behind NGINX (see docker-compose.yml).
+
+Endpoints that do blocking work (model download, inference, database, bcrypt)
+are plain functions: FastAPI runs them in its thread pool, so one slow call
+never freezes the event loop and every other request on the replica with it.
 """
 
 import asyncio
@@ -15,7 +20,7 @@ from typing import Any
 import joblib
 import mlflow
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
@@ -43,6 +48,7 @@ from src.api.schema import (
     schema_from_model,
     to_model_input,
 )
+from src.training.train import DECISION_THRESHOLD as DEFAULT_DECISION_THRESHOLD
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -53,10 +59,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 model: Any = None
 model_path = PROJECT_ROOT / "models/xgb_severity.joblib"
 
-# Registry name and alias set by src/training/train.py.
+# Registered by src/training/train.py; the alias is moved by
+# src/training/promote.py once a version clears the release gate.
 REGISTERED_MODEL_NAME = "xgb_severity"
 PRODUCTION_ALIAS = "production"
-MODEL_URI = f"models:/{REGISTERED_MODEL_NAME}@{PRODUCTION_ALIAS}"
 
 # Reported by /health and /predict so callers know which model answered.
 model_version: str = "unknown"
@@ -65,11 +71,18 @@ model_version: str = "unknown"
 # itself so they always match the served version. None until a model loads.
 feature_schema: FeatureSchema | None = None
 
-DECISION_THRESHOLD = 0.35  # decision threshold for the severe class
+# Probability above which a case is reported as severe. Read from the
+# decision_threshold tag train.py sets on each registered version, so the API
+# always applies the threshold that version was evaluated with.
+decision_threshold: float = DEFAULT_DECISION_THRESHOLD
 
 
 def load_model_from_registry() -> tuple[Any, str]:
     """Pulls the production model from the MLflow registry (DagsHub).
+
+    Resolves the version behind the alias first, then downloads that exact
+    version: resolving it afterwards could report another version than the
+    one loaded if the alias moved in between.
 
     Returns (None, "unknown") when MLFLOW_TRACKING_URI is unset, so the
     caller can fall back to the local file.
@@ -81,23 +94,38 @@ def load_model_from_registry() -> tuple[Any, str]:
 
     mlflow.set_tracking_uri(tracking_uri)
     start = time.time()
-    loaded = mlflow.xgboost.load_model(MODEL_URI)
-
-    # Resolve the concrete version behind the alias for traceability.
-    try:
-        version = str(
-            mlflow.MlflowClient()
-            .get_model_version_by_alias(REGISTERED_MODEL_NAME, PRODUCTION_ALIAS)
-            .version
-        )
-    except Exception:
-        version = "unknown"
-
+    version = str(
+        mlflow.MlflowClient()
+        .get_model_version_by_alias(REGISTERED_MODEL_NAME, PRODUCTION_ALIAS)
+        .version
+    )
+    loaded = mlflow.xgboost.load_model(f"models:/{REGISTERED_MODEL_NAME}/{version}")
     log.info(
-        f"Model pulled from registry: {MODEL_URI} (v{version}) "
-        f"in {time.time() - start:.1f}s"
+        f"Model pulled from registry: {REGISTERED_MODEL_NAME} v{version} "
+        f"(@{PRODUCTION_ALIAS}) in {time.time() - start:.1f}s"
     )
     return loaded, version
+
+
+def threshold_for(version: str) -> float:
+    """The decision threshold a registered version was evaluated with.
+
+    Falls back to the training default for the local file, for a version
+    without the tag, or when the registry cannot be reached.
+    """
+    if not os.environ.get("MLFLOW_TRACKING_URI") or not version.isdigit():
+        return DEFAULT_DECISION_THRESHOLD
+    try:
+        tags = (
+            mlflow.MlflowClient().get_model_version(REGISTERED_MODEL_NAME, version).tags
+        )
+        return float(tags["decision_threshold"])
+    except Exception as e:
+        log.warning(
+            f"No decision threshold for v{version} ({type(e).__name__}): "
+            f"using {DEFAULT_DECISION_THRESHOLD}"
+        )
+        return DEFAULT_DECISION_THRESHOLD
 
 
 def load_model_from_disk() -> tuple[Any, str]:
@@ -144,31 +172,41 @@ def load_model(attempts: int = 3, backoff: float = 5.0) -> tuple[Any, str]:
 def refresh_model() -> None:
     """Loads the production model and updates the module state.
 
-    Shared by startup and the reload endpoint so both go through exactly the
-    same path.
+    Shared by startup, the reload endpoint and the registry watcher, so all
+    three go through exactly the same path. Everything is prepared first and
+    swapped in one assignment: requests keep being served by the previous
+    model while the new one downloads, and never see a half-updated state.
     """
-    global model, model_version, feature_schema
+    global model, model_version, feature_schema, decision_threshold
 
     start = time.time()
-    model, model_version = load_model()
+    new_model, new_version = load_model()
     metrics.MODEL_LOAD_SECONDS.set(time.time() - start)
 
-    feature_schema = None
-    if model is None:
+    new_schema = None
+    if new_model is None:
         log.warning("No model available from registry or local file")
     else:
         try:
-            feature_schema = schema_from_model(model)
+            new_schema = schema_from_model(new_model)
             log.info(
-                f"Model expects {len(feature_schema.names)} features, "
-                f"{len(feature_schema.categories)} of them categorical"
+                f"Model expects {len(new_schema.names)} features, "
+                f"{len(new_schema.categories)} of them categorical"
             )
         except Exception:
             # Without its schema the model cannot read real values, so serving
             # it would only produce wrong predictions: refuse instead.
             log.exception("Could not read the input schema from the model")
-            model = None
+            new_model = None
+    new_threshold = threshold_for(new_version)
+    log.info(f"Decision threshold: {new_threshold}")
 
+    model, model_version, feature_schema, decision_threshold = (
+        new_model,
+        new_version,
+        new_schema,
+        new_threshold,
+    )
     metrics.set_served_model(model_version, loaded=model is not None)
 
 
@@ -194,9 +232,9 @@ def production_version() -> str | None:
 async def watch_registry(interval: float) -> None:
     """Reloads the model when another version is promoted to @production.
 
-    This is what closes the loop with retraining in GitHub Actions: CI cannot
-    reach this API, so the API checks the registry itself instead of waiting
-    to be told. /admin/reload-model stays available for an immediate reload.
+    This is what closes the loop with retraining: the Airflow pipeline calls
+    /admin/reload-model on one replica only, and a manual promotion calls
+    nothing at all, so every replica checks the registry itself.
     """
     while True:
         await asyncio.sleep(interval)
@@ -230,8 +268,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="ML Inference API",
-    description="Production inference service for ML models",
+    title="BAAC accident severity API",
+    description=(
+        "Predicts whether a person involved in a road accident is killed or "
+        "hospitalized, from the real BAAC values. Log in on /token first."
+    ),
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -317,22 +358,34 @@ class CreateUserRequest(BaseModel):
     role: Role = Role.OPERATOR
 
 
-@app.get("/health", response_model=HealthResponse)
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    responses={503: {"model": HealthResponse, "description": "No model loaded"}},
+)
 async def health_check():
-    """Health check endpoint.
+    """Health check endpoint: 200 when a model is loaded, 503 otherwise.
 
-    Left unauthenticated on purpose: Docker and the future reverse proxy
-    probe it, and it exposes no data beyond which model version is served.
+    A replica without a model can only answer 503 on /predict, so it reports
+    itself unhealthy too: Docker then marks the container unhealthy instead of
+    showing a green status for a service that cannot predict.
+
+    Left unauthenticated on purpose: Docker and NGINX probe it, and it exposes
+    no data beyond which model version is served.
     """
-    return HealthResponse(
-        status="healthy",
-        model_loaded=model is not None,
+    loaded = model is not None
+    body = HealthResponse(
+        status="healthy" if loaded else "no_model",
+        model_loaded=loaded,
         model_version=model_version,
     )
+    if not loaded:
+        return JSONResponse(status_code=503, content=body.model_dump())
+    return body
 
 
 @app.post("/token", response_model=TokenResponse, tags=["auth"])
-async def login(
+def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session),
 ):
@@ -375,51 +428,51 @@ async def model_schema(
 
 
 @app.post("/predict", response_model=PredictResponse, tags=["inference"])
-async def predict(
+def predict(
     request: PredictRequest,
     user: User = Depends(require_role(Role.OPERATOR, Role.SERVICE, Role.ADMIN)),
 ):
     """Makes a prediction using the loaded model. Requires a valid token."""
-    global model
-
-    if model is None or feature_schema is None:
-        raise HTTPException(
-            status_code=503, detail="Model not loaded. Train a model first."
-        )
+    # One consistent snapshot for the whole request, even if a reload swaps
+    # the model in the meantime.
+    served, schema, version, threshold = (
+        model,
+        feature_schema,
+        model_version,
+        decision_threshold,
+    )
+    if served is None or schema is None:
+        raise HTTPException(status_code=503, detail="Model not loaded.")
 
     # Validate against the served model before inference: an unknown column
     # or category value otherwise fails deep inside XGBoost as an opaque 500.
     try:
-        x = to_model_input(request.features, feature_schema)
+        x = to_model_input(request.features, schema)
     except InvalidFeaturesError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=e.errors
         )
 
     try:
-        # Get probabilities and apply our custom decision threshold
-        probs = None
-        if hasattr(model, "predict_proba"):
-            probs = model.predict_proba(x)[0].tolist()
-            pred = int(probs[1] >= DECISION_THRESHOLD)
-            metrics.SEVERE_PROBABILITY.observe(probs[1])
-        else:
-            pred = model.predict(x)[0]
+        # Probability of each class, then the version's own decision threshold.
+        probs = served.predict_proba(x)[0].tolist()
+        pred = int(probs[1] >= threshold)
+        metrics.SEVERE_PROBABILITY.observe(probs[1])
 
         metrics.PREDICTIONS.labels(
             outcome="severe" if pred == 1 else "non_severe",
-            model_version=model_version,
+            model_version=version,
         ).inc()
-        log.info(f"Prediction by {user.username}: {pred} (model v{model_version})")
+        log.info(f"Prediction by {user.username}: {pred} (model v{version})")
 
         # Feed drift detection. A logging failure must never cost an operator
         # their answer, so it is counted and logged but not raised.
         try:
             prediction_log.record_prediction(
                 features=request.features,
-                severe_probability=probs[1] if probs else float(pred),
-                prediction=int(pred),
-                model_version=model_version,
+                severe_probability=probs[1],
+                prediction=pred,
+                model_version=version,
                 username=user.username,
             )
         except Exception:
@@ -428,7 +481,7 @@ async def predict(
         return PredictResponse(
             prediction=pred,
             probabilities=probs,
-            model_version=model_version,
+            model_version=version,
         )
 
     except HTTPException:
@@ -442,7 +495,7 @@ async def predict(
 
 
 @app.post("/admin/users", response_model=UserInfo, status_code=201, tags=["admin"])
-async def add_user(
+def add_user(
     request: CreateUserRequest,
     admin: User = Depends(require_role(Role.ADMIN)),
     session: Session = Depends(get_session),
@@ -458,13 +511,14 @@ async def add_user(
 
 
 @app.post("/admin/reload-model", response_model=HealthResponse, tags=["admin"])
-async def reload_model(
+def reload_model(
     caller: User = Depends(require_role(Role.SERVICE, Role.ADMIN)),
 ):
     """Reloads the production model from the registry, without a restart.
 
     Called by the Airflow pipeline once a new version clears the release
-    gate, so operators get the new model with no downtime.
+    gate, so operators get the new model with no downtime. It reaches one
+    replica; the others follow through the registry watcher.
     """
     previous = model_version
     refresh_model()
@@ -480,7 +534,7 @@ async def reload_model(
 
 
 @app.get("/admin/users", response_model=list[UserInfo], tags=["admin"])
-async def list_users(
+def list_users(
     admin: User = Depends(require_role(Role.ADMIN)),
     session: Session = Depends(get_session),
 ):
@@ -490,7 +544,7 @@ async def list_users(
 
 
 @app.delete("/admin/users/{username}", response_model=UserInfo, tags=["admin"])
-async def deactivate_user(
+def deactivate_user(
     username: str,
     admin: User = Depends(require_role(Role.ADMIN)),
     session: Session = Depends(get_session),
@@ -517,38 +571,12 @@ async def deactivate_user(
     return UserInfo.from_user(user)
 
 
-# @app.get("/predict/batch")
-# async def predict_batch(features: str):
-#     """
-#     Batch prediction endpoint.
-
-#     Query param: features as comma-separated values (e.g., "1.0,2.0,3.0")
-#     """
-#     global model
-
-#     if model is None:
-#         raise HTTPException(status_code=503, detail="Model not loaded.")
-
-#     try:
-#         # Parse comma-separated features
-#         feature_list = [float(x) for x in features.split(",")]
-#         x = np.array(feature_list).reshape(1, -1)
-
-#         pred = model.predict(x)
-
-#         return {"prediction": float(pred[0])}
-
-#     except Exception as e:
-#         raise HTTPException(status_code=400, detail=str(e))
-
-
 @app.get("/metrics", include_in_schema=False)
 async def prometheus_metrics():
     """Prometheus scrape endpoint.
 
     Unauthenticated because Prometheus scrapes it from inside the Docker
-    network. It must not be exposed publicly: the reverse proxy should not
-    forward /metrics.
+    network. It must not be exposed publicly: NGINX answers 404 on /metrics.
     """
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 

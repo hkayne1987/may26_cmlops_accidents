@@ -1,5 +1,5 @@
-# Training Container Dockerfile
-# Phase 2: Containerized training pipeline
+# Batch jobs image: preprocessing, training, evaluation, promotion and drift
+# detection all run in it, each with its own command (see dags/).
 
 FROM python:3.10-slim
 

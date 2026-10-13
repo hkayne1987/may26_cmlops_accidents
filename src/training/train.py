@@ -1,8 +1,8 @@
 """
 Training of the accident severity model (XGBoost).
-Reads the preprocessed dataset (data/processed/) and performs a grouped
-split by accident.
-Trains and saves the model to models/.
+Reads the training set preprocess.py wrote (data/processed/train.parquet,
+already split by accident), trains, saves the model to models/ and registers
+it in MLflow without promoting it.
 
 Run via 'python -m src.training.train'.
 """
@@ -27,9 +27,13 @@ log = logging.getLogger(__name__)
 
 TRAIN_PATH = Path("data/processed/train.parquet")
 MODEL_DIR = Path("models")
-TEST_SIZE = 0.2
 RANDOM_STATE = 0
-DECISION_THRESHOLD = 0.35  # decision threshold for the severe class
+# Probability above which a case is reported as severe. Favours recall on the
+# severe class: missing a severe accident costs more than over-flagging a
+# minor one. Picked from evaluate.threshold_search on the tuned model (recall
+# 0.896, precision 0.380), near the F2 optimum. The single definition: it is
+# tagged on each registered version, and the API reads it from there.
+DECISION_THRESHOLD = 0.35
 
 REGISTERED_MODEL_NAME = "xgb_severity"
 # The production alias lives in src/training/promote.py: training registers a

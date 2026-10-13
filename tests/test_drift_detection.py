@@ -128,3 +128,17 @@ def test_metrics_are_pushed_under_one_job(monkeypatch):
     assert samples[("drift_share", ())] == pytest.approx(result.drift_share)
     assert samples[("drift_current_rows", ())] == 800
     assert samples[("drift_column_drifted", (("column", "catr"),))] == 1
+
+
+def test_reference_prefers_the_data_airflow_trained_on(tmp_path, monkeypatch):
+    local = tmp_path / "local.parquet"
+    pipeline = tmp_path / "pipeline.parquet"
+    monkeypatch.setattr(detection, "TRAIN_PATH", local)
+    monkeypatch.setattr(detection, "PIPELINE_TRAIN_PATH", pipeline)
+
+    with pytest.raises(FileNotFoundError):
+        detection.reference_path()
+    local.touch()
+    assert detection.reference_path() == local
+    pipeline.touch()
+    assert detection.reference_path() == pipeline

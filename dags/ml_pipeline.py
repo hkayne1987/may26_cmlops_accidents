@@ -226,8 +226,8 @@ with DAG(
         ],
     )
 
-    # Pulls the raw data main points to. Only data/raw: preprocess rebuilds
-    # data/processed, and the copy recorded in dvc.lock is stale.
+    # Pulls the raw data main points to. Only data/raw is versioned with DVC:
+    # preprocess rebuilds data/processed from it.
     dvc_pull = docker_task(
         task_id="dvc_pull",
         image=DVC_IMAGE,

@@ -1,60 +1,12 @@
-# Build context exclusions.
-# The Dockerfiles only need pyproject.toml, uv.lock, src/ and models/ —
-# data is bind-mounted at run time, and everything else listed here would
-# just slow the build down.
+# Build context: the Dockerfiles only copy pyproject.toml, uv.lock and src/.
+# Everything else is left out, so neither data (bind-mounted at run time),
+# models (pulled from the registry, or mounted), secrets (.env, user accounts)
+# nor local state ever ends up in an image or slows the build down.
+*
+!pyproject.toml
+!uv.lock
+!src/
 
-# Secrets: never send credentials into the build context
-.env
-# API user accounts (password hashes): mounted as a volume at run time,
-# it must never end up baked into an image.
-data/api_users.db
-# Prediction log (operators' requests), mounted the same way.
-data/predictions.db
-
-# Version control and local virtualenv (the image runs uv sync itself)
-.git/
-.gitignore
-.venv/
-
-# Raw BAAC data (~200 MB): only data/processed/ is copied into images
-data/raw/
-data/features/
-
-# MLflow local backend and artifacts (tracking runs on DagsHub)
-mlruns/
-artifacts/
-mlartifacts/
-
-# Monitoring volumes created by docker-compose
-prometheus_data/
-grafana_data/
-minio_data/
-
-# Airflow metadata database and logs
-airflow_data/
-
-# Python caches and test/lint artifacts
-__pycache__/
-*.py[cod]
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-
-# Docs, slides and exploration notebooks
-docs/
-slides/
-notebooks/
-reports/
-
-# Editor and OS noise
-.claude/
-.cursorignore
-.vscode/
-.idea/
-.DS_Store
-
-# Note: DVC files (.dvc/, *.dvc, dvc.yaml, dvc.lock) are deliberately NOT
-# excluded — the DVC container needs them to resolve the project root.
+# Python caches inside src/
+**/__pycache__
+**/*.py[cod]
