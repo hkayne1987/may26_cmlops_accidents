@@ -1,5 +1,5 @@
 # Prometheus configuration
-# Phase 4: Monitoring setup
+# Scrape targets for the monitoring stack (see docker-compose.yml).
 
 global:
   scrape_interval: 15s

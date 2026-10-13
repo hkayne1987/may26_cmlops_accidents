@@ -1,675 +1,255 @@
-
 # Road Accident Severity Prediction (BAAC)
 
-MLOps project predicting the severity of road accidents in France from the
-public BAAC dataset. The goal is to expose a trained classifier through an API;
-the focus of the project is on the MLOps lifecycle (reproducible pipeline,
-deployment, monitoring) rather than on modeling performance.
+MLOps project predicting, for each person involved in a road accident in France,
+whether they are **severely injured** (killed or hospitalized) or not, from the
+public [BAAC dataset](https://www.data.gouv.fr/datasets/53698f4ca3a729239d2036df/).
+The focus is the MLOps lifecycle (versioned data, tracked training, quality
+check before production, serving, monitoring, automatic updates) rather than
+model performance.
 
-**Target:** binary classification — `severe` (killed or hospitalized) vs
-`non_severe` (unharmed or slightly injured).
-**Scope:** BAAC 2019–2024 (homogeneous schema after the 2019 TRAxy reform).
-**Grain:** one row per road user involved in an accident.
+- **Data:** BAAC 2019-2024, ~596,000 road users, one row per person.
+- **Model:** XGBoost, decision threshold 0.35 to favour recall: an emergency
+call centre would rather over-flag than miss a severe case.
+- **Results on the test set:** AUC 0.876, recall 0.896, precision 0.38.
 
-## Requirements
 
-- Python 3.10, pinned in `.python-version` to match the CI and the Docker
-  images. uv picks it up on its own (and downloads it if needed): after a
-  `git pull`, `uv sync` recreates `.venv` if it was built on another version.
-- [uv](https://docs.astral.sh/uv/) for dependency management
-- Docker (optional, to run the containerized services)
 
-## Installation
+## Architecture
+
+```mermaid
+flowchart TB
+  gouv[data.gouv.fr] -->|monthly| ingest[ingest.yml]
+  ingest -->|opens| pr[Data pull request]
+  subgraph DagsHub
+    dvc[(DVC: raw data)]
+    mlflow[(MLflow: runs and registry)]
+  end
+  ingest -->|dvc push| dvc
+  subgraph host[Docker host]
+    airflow[Airflow ml_pipeline, daily]
+    ops[Operators] -->|JWT| nginx[NGINX :80]
+    nginx --> api[API x3]
+    api --> db[(predictions.db)]
+    db --> drift[Airflow drift_monitoring, daily]
+    drift --> pg[Pushgateway]
+    pg --> prom[Prometheus]
+    api -->|/metrics| prom
+    prom --> grafana[Grafana]
+  end
+  pr -->|merged on main| airflow
+  dvc -->|dvc pull| airflow
+  airflow -->|train, evaluate, promote| mlflow
+  mlflow -->|production alias| api
+  gh[GitHub Actions: CI, release] -.->|images on GHCR| airflow
+  gh -.->|images on GHCR| api
+```
+
+
+
+
+| Component         | Role                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/data/`       | Ingestion from data.gouv.fr, merge of the 4 BAAC tables, target, grouped train/test split                          |
+| `src/training/`   | Training, evaluation, and the metric check before production (`promote.py`)                                        |
+| `src/api/`        | FastAPI service: JWT auth, `/predict`, prediction log, Prometheus metrics                                          |
+| `src/monitoring/` | Drift detection (Evidently), and a script sending real accidents to the API to simulate traffic                    |
+| `dags/`           | Airflow: `ml_pipeline` (retraining) and `drift_monitoring`                                                         |
+| `deployment/`     | NGINX, Prometheus and Grafana configuration, including the dashboard                                               |
+| `docker/`         | Three images: `api`, `training` (every batch job: preprocessing, training, evaluation, promotion, drift) and `dvc` |
+
+
+
+
+## Quick start
+
+Requirements: Docker with Compose, [uv](https://docs.astral.sh/uv/), and a
+DagsHub account with access to the repository (data and models live there).
+On macOS, XGBoost needs `brew install libomp`.
+
+First time on a machine:
 
 ```bash
 git clone https://github.com/hkayne1987/may26_cmlops_accidents.git
 cd may26_cmlops_accidents
-
-## Install UV if you don't have it:
-brew install uv           #bash
-or 
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-## Create the virtual environment
-uv venv
-source .venv/bin/activate
-uv sync 
-```
-
-> macOS note: XGBoost requires the OpenMP runtime. If you hit a
-> `libxgboost.dylib could not be loaded` error, run `brew install libomp`.
-
-## Quick start
-
-The whole stack runs from `make`; `make help` lists every target. First time on
-a machine:
-
-```bash
 make setup                                    # uv sync, creates .env from env.example
-# fill in .env: DagsHub credentials, JWT_SECRET_KEY, API_PASSWORD
+# fill in .env: DagsHub user and token, JWT_SECRET_KEY, API_PASSWORD
 make data                                     # pull the raw data (DVC), preprocess it
 make users ARGS="create <name> --role admin"
 make users ARGS="create airflow_service --role service"   # password = API_PASSWORD
 ```
 
-Then, each time:
+Then:
 
 ```bash
-make update                                   # after a merge: git pull + latest published images
-make up                                       # API on http://localhost (NGINX), Grafana on :3000, Prometheus on :9090
-make health                                   # model loaded, version served
-make replay                                   # send real accidents to the API
-make drift                                    # data drift check, result in Grafana
-make airflow                                  # optional, Airflow on :8080 (~40 s to start)
-make airflow-password                         # its admin password
-make down                                     # stop everything, data kept
+make update      # after a merge: git pull + latest published images
+make up          # API behind NGINX, Prometheus, Pushgateway, Grafana
+make health      # check the API is up, and which model version it serves
+make replay      # send real accidents to the API (SCENARIO=motorway to make them drift)
+make drift       # drift check, result in Grafana
+make airflow     # optional, then make airflow-password for the admin login
+make down        # stop everything, data kept
 ```
 
-`make clean-state` also erases what the stack recorded (metrics, Airflow
-history, drift reports, logged predictions) and `make clean-images` removes the
-Docker images. Neither touches the data, the models or the API accounts.
+
+| Service         | URL                                                                                  | Login                             |
+| --------------- | ------------------------------------------------------------------------------------ | --------------------------------- |
+| API and Swagger | [http://localhost](http://localhost), [http://localhost/docs](http://localhost/docs) | API account                       |
+| Grafana         | [http://localhost:3000/d/baac-api](http://localhost:3000/d/baac-api)                 | `admin` / `GRAFANA_PASSWORD`      |
+| Prometheus      | [http://localhost:9090](http://localhost:9090)                                       | none                              |
+| Airflow         | [http://localhost:8080](http://localhost:8080)                                       | `admin` / `make airflow-password` |
+
+
+`make help` lists every target. `make clean-state` erases what the stack
+recorded (metrics, Airflow history, drift reports, logged predictions);
+`make clean-images` removes the images. Neither touches data, models or accounts.
 
 ## Data
 
-The BAAC data is versioned with DVC on DagsHub, not stored in Git. Git only
-carries the hash of `data/raw` (`data/raw.dvc`); the files themselves are
-pulled on demand:
-
-```bash
-make data
-```
-
-Run this once after cloning, and again after any `git pull` that changes
-`data/raw.dvc`. It is never automatic — `dvc status` tells you
-whether you are out of date:
-
-```bash
-docker compose --profile dvc run --rm dvc status
-```
-
-This populates `data/raw/` with the 4 tables per year for **2019 to 2024**
-(`caracteristiques`, `lieux`, `vehicules`, `usagers` — 24 files), then
-rebuilds `data/processed/` (`train.parquet` / `test.parquet`) from them.
-Only the raw data is versioned: the parquet files are always derived from it,
-and the model lives in the MLflow registry.
-
-After regenerating the data, push it back to the remote:
-
-```bash
-docker compose --profile dvc run --rm dvc push
-```
-
-The original source is
-[data.gouv.fr](https://www.data.gouv.fr/datasets/53698f4ca3a729239d2036df/);
-the variable description PDF is in `docs/`. New years and corrections are
-picked up from there automatically every month, and `data/sources.json`
-records which published file each local one comes from, see
-[Automatic updates](#automatic-updates).
-
-## Pipeline
-
-The pipeline runs in three steps (pull the data first, see [Data](#data)):
-
-```bash
-make preprocess   # load, merge and clean the 4 tables -> data/processed/{train,test}.parquet
-make train        # train XGBoost on train.parquet -> models/ + MLflow run
-make evaluate     # evaluate on test.parquet, log metrics to the MLflow run
-```
-
-`make train` registers the model in the MLflow registry and writes the run id to
-`models/run_id.txt`; `make evaluate` reuses that run id so metrics land on the
-same run. See [MLflow tracking](#mlflow-tracking-dagshub) below.
-
-Equivalent direct commands:
-
-```bash
-python -m src.data.preprocess
-python -m src.training.train
-python -m src.training.evaluate
-```
-
-Optional flags for training:
-
-```bash
-make train-sample   # train on a small subsample (quick test)
-make tune           # run hyperparameter search (long)
-make tune-sample    # run hyperparameter search on a subsample (quick test)
-```
-
-## MLflow tracking (DagsHub)
-
-Experiment tracking and the model registry are hosted on
-[DagsHub](https://dagshub.com/hkayne1987/may26_cmlops_accidents). Training logs
-hyperparameters, metrics and the data version there, and registers each model
-as a new version of `xgb_severity`. The `production` alias only moves when the
-model clears the [release gate](#the-release-gate).
-
-The data version is the md5 DVC records for `data/raw` in `data/raw.dvc`
-(`raw:8cbc0202...`), so any model can be traced back to the exact files it was
-trained on.
-
-Create a `.env` file at the repo root (it is gitignored — never commit it):
-
-```
-MLFLOW_TRACKING_URI=https://dagshub.com/hkayne1987/may26_cmlops_accidents.mlflow
-MLFLOW_TRACKING_USERNAME=<your-dagshub-username>
-MLFLOW_TRACKING_PASSWORD=<your-dagshub-token>
-```
-
-Each team member needs their own token (DagsHub → Settings → Tokens); tokens are
-personal and must not be shared.
-
-Without `MLFLOW_TRACKING_URI`, training falls back to a local `file:./mlruns`
-backend, which is enough to run the pipeline offline.
-
-## Running with Docker
-
-Services are defined in `docker-compose.yml` and read credentials from `.env`.
-The API needs `JWT_SECRET_KEY` there or it refuses to start, see
-[Authentication](#authentication).
-
-```bash
-docker compose up -d api nginx       # 3 API replicas behind NGINX on http://localhost
-```
-
-The images are the ones CI publishes on GHCR (see [CI/CD](#cicd)): `up` pulls
-them if they are missing, `docker compose pull` fetches the latest release.
-To run local changes instead, build them under the same name with
-`docker compose build api` (or `up -d --build api`).
-
-The API pulls `models:/xgb_severity@production` from the registry at startup
-(~10-15s), falling back to `models/xgb_severity.joblib` if the registry is
-unreachable. Check which model it loaded with:
-
-```bash
-curl http://localhost/health
-# {"status":"healthy","model_loaded":true,"model_version":"2"}
-```
-
-Training runs on demand rather than as part of the default stack. The image
-carries no data: `data/` is bind-mounted, so pull it first (see [Data](#data)).
-
-```bash
-docker compose --profile training run --rm training \
-  uv run python -m src.training.train --sample
-```
-
-This registers a new model version. It only reaches production through the
-release gate, and the API then picks it up on its own within 5 minutes, see
-[Automatic updates](#automatic-updates).
-
-Prometheus and Grafana sit behind a `monitoring` profile, see
-[Monitoring](#monitoring).
-
-### Reverse proxy (NGINX)
-
-The API runs as three replicas that are not published on the host: NGINX
-(`deployment/nginx/nginx.conf`) is the single entry point, on
-`http://localhost` (port 80). It:
-
-- spreads the requests over the replicas in turn, re-resolving them through
-  Docker's DNS so recreated replicas are picked up;
-- answers 404 on `/metrics`, which Prometheus reads directly over the Docker
-  network (it scrapes every replica, see `deployment/prometheus/prometheus.yml`);
-- limits `/token` to 10 login attempts per minute per address (burst of 5),
-  then answers 429, to slow down password guessing.
-
-Swagger is therefore on `http://localhost/docs`. Inside the Docker network,
-Airflow still calls `http://api:8000` directly.
-
-## API
-Run the API
-Test the API Internally
-Start the API locally with:
-```bash
-uv run uvicorn src.api.main:app --reload
-
-## Once started, the API will be available at (in Docker: http://localhost, through NGINX):
-API: http://localhost:8000
-Interactive documentation (Swagger UI): http://localhost:8000/docs
-ReDoc documentation: http://localhost:8000/redoc
-```
-
-Endpoints:
-
-| Endpoint | Access | Purpose |
-|---|---|---|
-| `GET /health` | public | Liveness, whether a model is loaded, and the served version |
-| `POST /token` | public | Exchanges username and password for an access token |
-| `GET /me` | any logged-in user | Returns the account behind the current token |
-| `POST /predict` | operator, service, admin | Runs inference |
-| `GET /model/schema` | operator, service, admin | Lists the columns `/predict` expects and the values each accepts |
-| `POST /admin/reload-model` | service, admin | Reloads the production model without a restart |
-| `POST /admin/users` | admin | Creates an account |
-| `GET /admin/users` | admin | Lists accounts |
-| `DELETE /admin/users/{username}` | admin | Disables an account |
-| `GET /metrics` | internal (Prometheus) | Metrics in Prometheus format, see [Monitoring](#monitoring) |
-
-`/health` stays public so Docker and the reverse proxy can probe it; every
-other endpoint except `/token` requires a token (see
-[Authentication](#authentication)).
-
-### Request format
-
-`/predict` takes the **real BAAC values**, keyed by column name, as they
-appear in the data.gouv.fr files: `"catv": "7"` for a car, `"lum": "1"` for
-daylight. Categorical codes may be sent as strings or numbers, and `null`
-means unknown. Column order does not matter.
-
-The API converts these values to the model's internal encoding itself:
-XGBoost stores the categories it saw in training inside the model, so the
-mapping always matches the version being served and follows each retrain.
-
-Example, a real severe accident from the test set (a driver in a car on an
-80 km/h road in Haute-Corse, in daylight):
-
-```json
-{
-  "features": {
-    "place": "1", "catu": "1", "sexe": "2", "secu1": "1", "secu2": "-1",
-    "secu3": "-1", "locp": "0", "actp": "0", "etatp": "-1", "senc": "2",
-    "catv": "7", "obs": "2", "obsm": "0", "choc": "3", "manv": "13",
-    "occutc": null, "jour": 19, "mois": 6, "an": 2023, "lum": "1",
-    "dep": "2B", "com": "2B193", "agg": "1", "int": "1", "atm": "1",
-    "col": "6", "lat": 42.37663, "long": 9.18949, "catr": "2", "circ": "2",
-    "nbv": 2, "vosp": "0", "prof": "1", "plan": "3", "surf": "1",
-    "infra": "0", "situ": "3", "vma": 80, "heure": 16, "minute": 57
-  }
-}
-```
-
-Response:
-
-```json
-{
-  "prediction": 1,
-  "probabilities": [0.22261929512023926, 0.7773807048797607],
-  "model_version": "6"
-}
-```
-
-A request that does not match the model is refused with a 422 listing every
-problem at once: missing or unknown columns, non-numeric values, and category
-values never seen in training (with the accepted ones). `GET /model/schema`
-lists the 40 expected columns and their allowed values; the column meanings
-are in the variable description PDF in `docs/`.
-`model_version` is the MLflow registry version currently served, or `"local"`
-when the API fell back to the on-disk model.
-
-## Authentication
-
-The API is meant for emergency call centre staff, so `/predict` is not open:
-callers log in and use a short-lived token. Three roles exist:
-
-| Role | Can |
-|---|---|
-| `operator` | Run predictions. Call centre staff. |
-| `service` | Run predictions and reload the production model, but not touch accounts. Used by the Airflow pipeline. |
-| `admin` | Everything, including managing accounts. |
-
-Set `JWT_SECRET_KEY` in `.env` before starting. It signs the tokens, so a weak
-value would let anyone forge them: the API refuses to start if it is missing
-or shorter than 32 characters.
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
-
-Accounts live in a SQLite database (`data/api_users.db`, gitignored: it holds
-password hashes). Create the first admin from the command line, since
-`/admin/users` is itself admin-only:
-
-```bash
-docker compose run --rm api uv run python -m src.api.manage_users create <name> --role admin
-```
-
-The same script offers `list`, `reset-password`, `disable` and `enable`. The password is prompted rather
-than passed as an argument, so it stays out of the shell history.
-
-Log in, then send the token on every call:
-
-```bash
-TOKEN=$(curl -s -X POST http://localhost/token \
-  -d "username=<name>&password=<password>" | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
-curl -X POST http://localhost/predict \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d @request.json   # a body like the one in Request format above
-```
-
-Tokens expire after `ACCESS_TOKEN_EXPIRE_MINUTES` (30 by default). Disabling an
-account takes effect immediately rather than at expiry: the API re-reads the
-account on every request, so a revoked operator cannot keep working with a
-token issued moments earlier.
-
-Swagger UI at `/docs` has an **Authorize** button that performs the same login.
-Once authorized, `GET /model/schema` shows what `/predict` expects, see
-[Request format](#request-format).
-
-## Orchestration (Airflow)
-
-The `ml_pipeline` DAG runs the whole chain, each step in the container it
-already ships with, so Airflow adds orchestration without duplicating a single
-dependency:
+Only the raw CSVs are versioned, with DVC on DagsHub: Git carries their hash in
+`data/raw.dvc`. `make data` pulls them, then rebuilds `data/processed/`
+(`train.parquet`, `test.parquet`) from them; the processed files are never
+versioned. The column meanings are in
+`docs/description-des-bases-de-donnees-annuelles.pdf`.
+
+Preprocessing choices:
+
+- **2019 onwards only**: the BAAC format changed in 2019. Preprocessing uses
+every year whose four files are in `data/raw/`, so a new year is picked up
+without any code change.
+- **Binary target**: `severe` for people killed or hospitalized, `non_severe`
+for people unharmed or slightly injured. Two classes rather than four also
+absorb the frequent confusion between hospitalized and slightly injured.
+- **Split by accident** (`GroupShuffleSplit` on `Num_Acc`): people from the same
+accident share place, time and weather, and would otherwise leak between
+train and test.
+
+
+
+## Training and release
+
+Training logs every run to [MLflow on DagsHub](https://dagshub.com/hkayne1987/may26_cmlops_accidents)
+(hyperparameters, metrics, and the DVC hash of the raw data, so each model
+traces back to its exact files) and registers a version of
+`xgb_severity`. Hyperparameters come from a grid search scored on AUC with
+grouped cross-validation (`make tune`).
+
+Training never puts a model in production. `promote.py` moves the
+`production` alias only when the model reaches **an AUC and a recall on the
+severe class of at least 0.85** on the test set. A rejected model stays in the registry for analysis, and production keeps the
+previous one. Rolling back is moving the alias back to an earlier version.
+
+**Airflow** runs it all in the `ml_pipeline` DAG, one container per task:
 
 ```
 check_new_data -> sync_main -> dvc_pull -> preprocess -> train -> evaluate -> promote -> reload_api
 ```
 
-```bash
-make airflow                               # http://localhost:8080
-make airflow-password                      # admin password, new at each start
-```
+It runs daily and only retrains when the data on `main` changed:
+`check_new_data` compares `data/raw.dvc` on GitHub with the data version of
+the latest registered model (latest rather than production, so a rejected
+model does not trigger a retrain every day). A manual trigger always runs.
+The pipeline works on its own clone of `main` (`airflow_data/workspace`), so it
+trains on reviewed data with the published code, never on a local checkout.
 
-It runs **every day** and retrains only when the data on `main` changed:
-`check_new_data` compares the DVC hash in `data/raw.dvc` on GitHub with the
-`data_version` of the latest registered model, and skips every other task when
-they match. The latest model rather than the production one: a model the
-release gate rejected keeps production on older data, and comparing against
-production would retrain on the same data every day. Daily is soon enough
-for data that changes a few times a year; trigger the DAG by hand to retrain
-at once.
+Retraining lives in Airflow rather than GitHub Actions because GitHub-hosted
+jobs stop after 6 hours and have no GPU. `retrain.yml` runs the same steps by
+hand, as a fallback when Airflow is down.
 
-A manual trigger always runs the whole chain:
+## API
 
-```bash
-docker compose --profile airflow exec airflow airflow dags trigger ml_pipeline
-```
 
-The pipeline works on its own clone of `main`, in `airflow_data/workspace`
-(gitignored), never on the developer's checkout: it trains on reviewed data,
-with the code release.yml published from the same branch. Your local
-`data/` is left alone; after new data is merged, `git pull && make data`
-brings it up to date for `make replay` and `make drift`.
+| Endpoint                   | Access                   | Purpose                                                  |
+| -------------------------- | ------------------------ | -------------------------------------------------------- |
+| `GET /health`              | public                   | 200 with the served version, 503 when no model is loaded |
+| `POST /token`              | public                   | Username and password for a JWT valid 30 minutes         |
+| `POST /predict`            | operator, service, admin | Probability and class                                    |
+| `GET /model/schema`        | operator, service, admin | Expected columns and accepted values                     |
+| `POST /admin/reload-model` | service, admin           | Reload the production model now                          |
+| `/admin/users`             | admin                    | Create, list and disable accounts                        |
 
-Both DAGs are active as soon as Airflow starts (`is_paused_upon_creation`).
-Retraining only happens while Airflow runs: when it is down, new data waits
-for the next start, or `retrain.yml` can be run by hand from GitHub Actions.
 
-### The release gate
+`/predict` takes the **real BAAC values by column name** (`"catv": "7"` for a
+car, `null` for unknown); the API converts them with the categories stored in
+the model itself, so the contract follows each retrained version. A request
+that does not match is refused with a 422 listing every problem. Swagger shows
+a complete example.
 
-`train` registers a new model version but does not put it in production.
-`promote` does, and only when the metrics logged by `evaluate` clear the
-thresholds in `src/training/promote.py`:
+Authentication: passwords are hashed with bcrypt, tokens signed with
+`JWT_SECRET_KEY` (the API refuses to start without a strong one), and the
+account is re-read on each request, so disabling it cuts access at once.
+Roles: `operator` (call centre staff), `service` (Airflow), `admin`. Accounts
+are managed with `make users ARGS="create|list|reset-password|disable|enable ..."`.
 
-| Metric | Minimum | Override |
-|---|---|---|
-| `auc_roc` | 0.85 | `MIN_AUC_ROC` |
-| `recall` (severe class) | 0.85 | `MIN_RECALL_SEVERE` |
-
-Recall comes first: reporting a severe accident as minor is worse than
-over-flagging a minor one. Both values sit a few points below what a full
-training run produces (auc 0.8763, recall 0.8961), so a comparable model passes
-and a degraded one does not.
-
-When a metric falls short, `promote` fails, `reload_api` never runs, and the
-previous model keeps serving. A red `promote` task means production is
-untouched, which is the intended outcome rather than an incident.
-
-Missing metrics count as a failure too: an unmeasured model must not reach
-production.
-
-### Requirements
-
-The DAG needs a `service` account for the API (`reload_api` calls
-`/admin/reload-model`), and `API_PASSWORD` set in `.env`:
-
-```bash
-make users ARGS="create airflow_service --role service"
-```
-
-Airflow starts the task containers through the host Docker socket, mounted into
-its own container. That is a privileged access: anything running in Airflow can
-control Docker on the host. Acceptable locally, to revisit before any real
-deployment.
+The API runs as **three replicas behind NGINX**, the only entry point. NGINX
+spreads requests between them, answers 404 on `/metrics` (internal to
+Prometheus) and limits `/token` to 10 attempts per minute per address. Each
+replica checks the registry every `MODEL_POLL_SECONDS` (300) and reloads on
+its own when the `production` alias moves, without dropping requests.
 
 ## CI/CD
 
-Four workflows, all in `.github/workflows/`. The first two check and publish
-the code; the last two keep the data and the model up to date, see
-[Automatic updates](#automatic-updates).
 
-**`ci.yml`** runs on every pull request and every push to `main`:
+| Workflow      | When                                  | What                                                                                                 |
+| ------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `ci.yml`      | every pull request and push to `main` | ruff, mypy, pytest; builds the images on pull requests                                               |
+| `release.yml` | merge to `main`                       | publishes the three images to GHCR, amd64 and arm64, tagged `latest` and with the commit SHA         |
+| `ingest.yml`  | 1st of each month                     | checks data.gouv.fr; on new or corrected files, versions them with DVC and opens a data pull request |
+| `retrain.yml` | by hand                               | fallback retraining when Airflow is down                                                             |
 
-| Step | Command |
-|---|---|
-| Lint | `ruff check src/ tests/` |
-| Format | `ruff format --check src/ tests/` |
-| Types | `mypy src/` |
-| Tests | `pytest tests/ --cov=src` |
-| Images | builds the three Dockerfiles without pushing (pull requests only) |
 
-**`release.yml`** runs once a change is merged to `main`, and publishes the
-three images to the GitHub Container Registry:
-
-```
-ghcr.io/hkayne1987/may26_cmlops_accidents/baac-api:latest
-ghcr.io/hkayne1987/may26_cmlops_accidents/baac-training:latest
-ghcr.io/hkayne1987/may26_cmlops_accidents/baac-dvc:latest
-```
-
-Each image is tagged twice: with the commit SHA, which pins a build for good,
-and with `latest`, which follows `main`. Pull one with:
-
-```bash
-docker pull ghcr.io/hkayne1987/may26_cmlops_accidents/baac-api:latest
-```
-
-GHCR rather than Docker Hub: the registry token is provided by GitHub itself
-(`secrets.GITHUB_TOKEN`), so there is no secret to create or rotate, and the
-images belong to the repository rather than to one member's personal account.
-Docker Hub organisations are a paid feature.
-
-The packages are public: anyone can pull them without logging in.
-
-**`ingest.yml`** runs on the 1st of each month and checks data.gouv.fr for new
-or corrected BAAC files. **`retrain.yml`** retrains by hand, as a fallback for
-when Airflow is not running. Both are described below.
-
-### Secrets they need
-
-Set in the repository **Settings → Secrets and variables → Actions**:
-
-| Name | Value | Used by |
-|---|---|---|
-| `DAGSHUB_USER` | a DagsHub username with write access to the repository | `ingest.yml`, `retrain.yml` |
-| `DAGSHUB_TOKEN` | that user's DagsHub access token | `ingest.yml`, `retrain.yml` |
-| `DATA_PR_TOKEN` | a member's GitHub classic token, `public_repo` scope only | `ingest.yml` |
-
-`DATA_PR_TOKEN` is there because GitHub's own workflow token may not open pull
-requests unless the repository owner allows it, which collaborators cannot do.
-The data pull requests are therefore opened in that member's name, and
-`ingest.yml` fails once the token expires: generate a new one then. Without the
-secret, `ingest.yml` falls back to GitHub's token.
+Repository secrets: `DAGSHUB_USER` and `DAGSHUB_TOKEN` (ingestion, retraining),
+and `DATA_PR_TOKEN`, a member's classic token with `public_repo` scope, because
+collaborators cannot let GitHub's own token open pull requests.
 
 ## Automatic updates
 
-From a new file on data.gouv.fr to the model and code the API serves, with a
-human decision in the middle:
 
-| Step | Where | What happens |
-|---|---|---|
-| 1. Detection | `ingest.yml`, monthly | compares data.gouv.fr with `data/sources.json` |
-| 2. Ingestion | `ingest.yml` | downloads new or corrected files, versions them on DagsHub with DVC |
-| 3. Review | pull request | a human checks the new data and merges, or not |
-| 4. Retraining | Airflow `ml_pipeline`, within a day | sees the new data on `main`, then dvc pull, preprocess, train, evaluate, release gate |
-| 5. Model update | the API | sees `@production` move in the registry and reloads, no restart |
-| 6. Code update | Watchtower | replaces the running API when CI publishes a new image |
+| Step         | Where                 | What happens                                                                               |
+| ------------ | --------------------- | ------------------------------------------------------------------------------------------ |
+| New data     | `ingest.yml`, monthly | detects and versions new or corrected files, opens a pull request                          |
+| Review       | pull request          | a human checks the data and merges, or not                                                 |
+| Retraining   | Airflow, within a day | trains, evaluates, and promotes if AUC and recall reach 0.85                               |
+| Model update | each API replica      | sees the alias move and reloads, no restart                                                |
+| Code update  | Watchtower (optional) | `docker compose --profile autoupdate up -d` replaces the API when CI publishes a new image |
 
-### 1-3. New data
 
-`src/data/ingest.py` asks the data.gouv.fr API which BAAC files exist from
-2019 on. File names change every year (`caracteristiques-2019`,
-`carcteristiques-2021`, `caract-2023`, `Caract_2024`), so tables are recognised
-by prefix and saved under one naming scheme in `data/raw/`.
 
-A file counts as changed when its date or size differs from
-`data/sources.json`, the manifest of the files in use. It is then downloaded
-and hashed: only a different content is a change, since the API omits the
-checksum for some files and a metadata edit alone must not trigger a retrain.
-When nothing changed, the workflow stops after one API call, with no pull
-request and no notification.
-
-Monthly rather than yearly: a new year comes out around October, but past
-years are corrected at any time (`usagers-2022` was republished in 2025).
-
-```bash
-uv run python -m src.data.ingest --dry-run   # what changed, nothing downloaded
-```
-
-`src/data/preprocess.py` finds the years from the files present, so a new year
-needs no code change.
-
-Two things to know:
-
-- On a public repository, GitHub **disables scheduled workflows after 60 days
-  without activity**. Re-enable `ingest.yml` from the Actions tab if it stops.
-- A file whose metadata changed but content did not is downloaded again each
-  month, until the next real data pull request records it. Harmless.
-
-### 4. Retraining
-
-The Airflow `ml_pipeline` DAG checks every day whether the data on `main`
-changed, and retrains when it did (see
-[Orchestration](#orchestration-airflow)). Each run logs the data version
-(`raw:<md5 of data/raw>`) to MLflow. A model that falls short of the
-[release gate](#the-release-gate) fails the run and never reaches production.
-
-Retraining runs in Airflow rather than in GitHub Actions because GitHub-hosted
-jobs stop after 6 hours and have no GPU: fine for this dataset, not for a
-larger one. `retrain.yml` runs the same steps on a GitHub runner, started by
-hand from the Actions tab, for when Airflow is down.
-
-### 5. The API follows the registry
-
-The API checks every `MODEL_POLL_SECONDS` (default 300, `0` disables it) which
-version carries `@production`, and reloads when it moved. It keeps answering
-with the previous model while the new one downloads. `POST
-/admin/reload-model` still forces an immediate reload.
-
-### 6. Watchtower updates the running API
-
-```bash
-docker compose --profile autoupdate up -d
-```
-
-[Watchtower](https://github.com/nicholas-fedor/watchtower) (the maintained
-fork; the original is archived) checks GHCR every 5 minutes and recreates the
-`api` container when a new `baac-api:latest` is out, keeping its settings. It
-only touches containers labelled `com.centurylinklabs.watchtower.enable=true`.
-
-It is opt-in because in development it would replace an image you just built
-locally with the published one. For the same reason, the Airflow DAGs pull the
-published images before each task: set `PULL_IMAGES=false` in `.env` to run
-local builds instead.
 
 ## Monitoring
 
-The API exposes Prometheus metrics on `/metrics`. Prometheus scrapes it over
-the Docker network, and Grafana shows them on a provisioned dashboard.
+Prometheus scrapes every API replica and Grafana shows a provisioned dashboard
+(`deployment/grafana/`): traffic, latency, errors, served version, share of
+severe predictions, probability distribution, login attempts, reloads.
+
+**Data drift:** the true severity is only known with next year's BAAC release,
+so the early warning is a change in what operators send. Every prediction is
+logged in `data/predictions.db`; the daily `drift_monitoring` DAG (or
+`make drift`) compares the last 7 days of requests with the data the
+production model was trained on, using Evidently, and alerts in Grafana when
+25% of the columns drift. The HTML report is in `reports/drift/`.
+
+A drift alert calls for a human look, not a retrain: retraining needs new
+labelled data, and the same data would give the same model.
+
+## Development
 
 ```bash
-docker compose up -d api
-docker compose --profile monitoring up -d
+make test        # pytest
+make lint        # ruff on src/, tests/, dags/
+make typecheck   # mypy
+make preprocess train evaluate   # the pipeline locally, without Docker
 ```
 
-| Service | URL | Login |
-|---|---|---|
-| Prometheus | http://localhost:9090 | none |
-| Grafana | http://localhost:3000/d/baac-api | `admin` / `GRAFANA_PASSWORD` from `.env` |
-| Pushgateway | http://localhost:9091 | none |
+Without `MLFLOW_TRACKING_URI`, training logs to a local `./mlruns`. After
+changing code, rebuild the images (`docker compose build api training`) and set
+`PULL_IMAGES=false` so Airflow runs them instead of the published ones.
 
-The data source and the **BAAC severity API** dashboard are provisioned from
-`deployment/grafana/`, so there is nothing to set up by hand. UI edits are
-kept until Grafana restarts: export the JSON and commit it to keep them.
+## Known limitations
 
-| Metric | What it tells you |
-|---|---|
-| `api_http_requests_total`, `api_http_request_duration_seconds` | traffic, errors and latency per route |
-| `api_model_version_info`, `api_model_loaded` | which model version is served, and whether one is loaded at all |
-| `api_model_load_duration_seconds`, `api_model_reloads_total` | how long the last load took, and reloads triggered by Airflow |
-| `api_predictions_total` | predictions by outcome (`severe` / `non_severe`) and model version |
-| `api_prediction_severe_probability` | distribution of the severe-class probability, often the first visible sign of drift |
-| `api_login_attempts_total` | login successes and failures, to spot password guessing |
+- Retraining only happens while Airflow runs; new data waits for the next start
+(or `retrain.yml`).
+- Airflow starts task containers through the host Docker socket, a privileged
+access that is fine locally but would need revisiting for a real deployment.
+- GitHub disables scheduled workflows after 60 days without activity on a
+public repository: re-enable `ingest.yml` from the Actions tab if it stops.
 
-Routes are labelled by template (`/admin/users/{username}`), never by raw path,
-so the number of time series stays bounded.
-
-`/metrics` is unauthenticated because only Prometheus reads it, from inside
-the Docker network. **It must not be exposed publicly**: NGINX answers 404 on
-it.
-
-### Data drift
-
-Whether an accident really was severe is only known once a year, with the
-next BAAC release. Until then, the only early sign that the model may be
-degrading is a change in what operators send it. That is what drift
-detection watches.
-
-1. Every call to `/predict` is logged with the real values received, in
-   `data/predictions.db` (gitignored, mounted from the host).
-2. `src/monitoring/detection.py` compares the last 7 days of requests with a
-   sample of the training data, using [Evidently](https://www.evidentlyai.com/).
-3. It writes an HTML report to `reports/drift/drift_report_latest.html` and
-   pushes the result to the Pushgateway, so it shows in the **Data drift** row
-   of the Grafana dashboard.
-4. Airflow runs it daily (`drift_monitoring` DAG). It is safe to schedule: it
-   only measures and never touches the served model.
-
-The alert fires when **25% of the compared columns** drift, the same
-threshold in Grafana and in the Evidently report. `com` (24k communes, too
-sparse to test) and `an` (the year always moves forward) are left out, and a
-column empty in the window is skipped. Thresholds and window can be tuned
-from `.env`, see `env.example`.
-
-**A drift alert does not retrain the model.** Retraining needs new labelled
-data, and retraining on the same data would give the same model. The decision
-process is:
-
-| Signal | When | Response |
-|---|---|---|
-| Drift in the requests | any day | alert in Grafana, a human looks at what changed |
-| New BAAC year merged on `main` | once a year | `ml_pipeline` retrains within a day; `promote` only releases a model that clears the metric gate |
-| Manual decision | any time | run `ml_pipeline` by hand |
-
-#### Trying it out
-
-The API gets no real traffic in this project, so `make replay` sends real
-accidents from the test set through it, like operators would. A scenario other
-than `normal` restricts them to one kind of accident, making the inputs drift
-on purpose:
-
-```bash
-docker compose up -d api
-docker compose --profile monitoring up -d
-
-make replay SCENARIO=normal ROWS=500     # ordinary accidents
-make drift                               # -> no drift
-make replay SCENARIO=motorway ROWS=500   # now half the week is motorways
-make drift                               # -> alert, ~40% of columns drifted
-```
-
-Scenarios: `normal`, `motorway`, `pedestrians`, `night`, `two_wheelers`.
-
-## Project structure
-
-`src/data/`: Load, merge BAAC tables, build target, feature engineering and train/test split  
-`src/training/`: Train, save model + feature schema, metrics calculation and threshold search  
-`src/api/`: FastAPI inference service  
-`data/`: Raw BAAC CSVs and train.parquet / test.parquet (versioned with DVC, not in Git)  
-`models/`: Trained model + feature schema (metrics are logged to MLflow)  
-`docker/`: Dockerfiles for the API and training images  
-`docs/`: PDF explaining features  
-
-## Methodology notes
-
-Key choices:
-
-- **Binary target** to absorb the known label noise on the
-  hospitalized/slightly-injured boundary since the 2018 reform.
-- **2019+ only** to keep a consistent schema (the BAAC format changed in 2019).
-- **Group-aware split** (`GroupShuffleSplit` on `Num_Acc`) so that all users of
-  the same accident stay on the same side, preventing leakage.
-- **Schema drift handled across years** (e.g. `Accident_Id` → `Num_Acc` in 2022,
-  `num_veh` not unique in some years — joins use `id_vehicule`).
