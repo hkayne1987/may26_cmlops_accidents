@@ -124,7 +124,9 @@ health:
 monitoring:
 	docker compose --profile monitoring up -d
 
-up: api monitoring nginx
+# The monitoring profile also starts every service without a profile (api,
+# nginx): one command brings up the whole stack.
+up: monitoring
 
 # After a merge: the latest code, and the images release.yml published from
 # it. `make up` alone never re-downloads an image it already has, so without
