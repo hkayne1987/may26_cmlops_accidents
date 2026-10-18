@@ -138,9 +138,11 @@ update:
 airflow:
 	docker compose --profile airflow up -d
 
-# Standalone Airflow generates the admin password when it starts.
+# Standalone Airflow generates the admin password on its first start and keeps
+# it with the persisted database (only make clean-state resets it).
+AIRFLOW_PASSWORDS = airflow_data/db/simple_auth_manager_passwords.json.generated
 airflow-password:
-	@docker compose --profile airflow logs airflow | grep "Password for user"
+	@cat $(AIRFLOW_PASSWORDS) 2>/dev/null && echo || echo "No password yet: run make airflow and wait about a minute"
 
 down:
 	docker compose $(PROFILES) down
