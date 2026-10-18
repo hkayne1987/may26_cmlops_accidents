@@ -7,7 +7,7 @@ The focus is the MLOps lifecycle (versioned data, tracked training, quality
 check before production, serving, monitoring, automatic updates) rather than
 model performance.
 
-- **Data:** BAAC 2019-2024, ~596,000 road users, one row per person.
+- **Data:** BAAC 2019-2024, ~745,000 road users, one row per person.
 - **Model:** XGBoost, decision threshold 0.35 to favour recall: an emergency
 call centre would rather over-flag than miss a severe case.
 - **Results on the test set:** AUC 0.876, recall 0.896, precision 0.38.
@@ -117,8 +117,7 @@ Preprocessing choices:
 every year whose four files are in `data/raw/`, so a new year is picked up
 without any code change.
 - **Binary target**: `severe` for people killed or hospitalized, `non_severe`
-for people unharmed or slightly injured. Two classes rather than four also
-absorb the frequent confusion between hospitalized and slightly injured.
+for people unharmed or slightly injured.
 - **Split by accident** (`GroupShuffleSplit` on `Num_Acc`): people from the same
 accident share place, time and weather, and would otherwise leak between
 train and test.
