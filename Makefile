@@ -24,7 +24,7 @@ help:
 	@echo "  make evaluate          - evaluate the model on the test set"
 	@echo "  make mlflow-ui-local   - open the local MLflow UI (./mlruns); remote tracking runs on DagsHub"
 	@echo "  make users ARGS=...    - manage API accounts, e.g. ARGS=\"create alice --role admin\""
-	@echo "  make replay            - send real accidents to the API, e.g. SCENARIO=motorway ROWS=500"
+	@echo "  make replay            - send real accidents to the API, e.g. SCENARIO=motorway ROWS=300"
 	@echo "  make drift             - compare logged predictions with the training data (Evidently)"
 
 install:
@@ -88,7 +88,7 @@ preprocess-train-evaluate:
 # Scenarios: normal, motorway, pedestrians, night, two_wheelers.
 # Needs API_USERNAME / API_PASSWORD, read from .env.
 SCENARIO ?= normal
-ROWS ?= 500
+ROWS ?= 300
 replay:
 	set -a; . ./.env; set +a; \
 	uv run python -m src.monitoring.replay --scenario $(SCENARIO) --rows $(ROWS)
