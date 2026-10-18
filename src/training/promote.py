@@ -71,13 +71,26 @@ def meets_thresholds(metrics: dict[str, float]) -> tuple[bool, list[str]]:
 
 
 def promote(client: mlflow.MlflowClient, version: str) -> None:
-    """Moves the production alias onto the given version."""
+    """Moves the production alias, and the stage tag with it, onto the given version."""
+    try:
+        previous = client.get_model_version_by_alias(
+            REGISTERED_MODEL_NAME, PRODUCTION_ALIAS
+        ).version
+    except Exception:
+        previous = None
+
     client.set_registered_model_alias(
         name=REGISTERED_MODEL_NAME, alias=PRODUCTION_ALIAS, version=version
     )
     client.set_model_version_tag(
         name=REGISTERED_MODEL_NAME, version=version, key="stage", value="production"
     )
+    # Only the version behind the alias carries the tag, so the registry never
+    # shows several versions "in production".
+    if previous is not None and str(previous) != str(version):
+        client.delete_model_version_tag(
+            name=REGISTERED_MODEL_NAME, version=previous, key="stage"
+        )
     log.info(
         f"Promoted {REGISTERED_MODEL_NAME} v{version} to "
         f"@{PRODUCTION_ALIAS}: the API serves it on its next reload"
