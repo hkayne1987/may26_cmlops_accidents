@@ -98,8 +98,8 @@ services:
   # Airflow: orchestrates the end-to-end pipeline.
   # Usage: docker compose --profile airflow up -d   -> http://localhost:8080
   # Runs in standalone mode (scheduler, API server and a SQLite metadata
-  # database in one container), which is enough to drive a manually
-  # triggered pipeline locally.
+  # database in one container), which is enough to run the daily DAGs
+  # locally. The DAGs only run while this container is up.
   airflow:
     image: apache/airflow:3.3.1
     ports:
@@ -116,6 +116,9 @@ services:
       # Point the metadata database at the persisted subdirectory.
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/db/airflow.db
       - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs
+      # Keep the generated admin password with the persisted database, so it
+      # survives `make down` instead of changing at every start.
+      - AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE=/opt/airflow/db/simple_auth_manager_passwords.json.generated
     volumes:
       - ./dags:/opt/airflow/dags
       # Only the metadata database and logs are persisted. Mounting

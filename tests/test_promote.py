@@ -65,3 +65,39 @@ def test_value_exactly_at_threshold_passes():
     metrics = {"auc_roc": promote.MIN_AUC_ROC, "recall": promote.MIN_RECALL_SEVERE}
     passed, _ = promote.meets_thresholds(metrics)
     assert passed
+
+
+class FakeRegistry:
+    """Records the alias and tags promote() sets, like MlflowClient would."""
+
+    def __init__(self, production=None):
+        self.alias = production
+        self.tags = {production: "production"} if production else {}
+
+    def get_model_version_by_alias(self, name, alias):
+        if self.alias is None:
+            raise RuntimeError("no alias")
+        return type("Version", (), {"version": self.alias})()
+
+    def set_registered_model_alias(self, name, alias, version):
+        self.alias = version
+
+    def set_model_version_tag(self, name, version, key, value):
+        self.tags[version] = value
+
+    def delete_model_version_tag(self, name, version, key):
+        self.tags.pop(version, None)
+
+
+def test_stage_tag_moves_with_the_alias():
+    registry = FakeRegistry(production="7")
+    promote.promote(registry, "8")
+    assert registry.alias == "8"
+    assert registry.tags == {"8": "production"}
+
+
+def test_first_promotion_without_previous_version():
+    registry = FakeRegistry()
+    promote.promote(registry, "1")
+    assert registry.alias == "1"
+    assert registry.tags == {"1": "production"}

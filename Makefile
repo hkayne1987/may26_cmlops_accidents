@@ -24,7 +24,7 @@ help:
 	@echo "  make evaluate          - evaluate the model on the test set"
 	@echo "  make mlflow-ui-local   - open the local MLflow UI (./mlruns); remote tracking runs on DagsHub"
 	@echo "  make users ARGS=...    - manage API accounts, e.g. ARGS=\"create alice --role admin\""
-	@echo "  make replay            - send real accidents to the API, e.g. SCENARIO=motorway ROWS=500"
+	@echo "  make replay            - send real accidents to the API, e.g. SCENARIO=motorway ROWS=300"
 	@echo "  make drift             - compare logged predictions with the training data (Evidently)"
 
 install:
@@ -88,7 +88,7 @@ preprocess-train-evaluate:
 # Scenarios: normal, motorway, pedestrians, night, two_wheelers.
 # Needs API_USERNAME / API_PASSWORD, read from .env.
 SCENARIO ?= normal
-ROWS ?= 500
+ROWS ?= 300
 replay:
 	set -a; . ./.env; set +a; \
 	uv run python -m src.monitoring.replay --scenario $(SCENARIO) --rows $(ROWS)
@@ -124,7 +124,9 @@ health:
 monitoring:
 	docker compose --profile monitoring up -d
 
-up: api monitoring nginx
+# The monitoring profile also starts every service without a profile (api,
+# nginx): one command brings up the whole stack.
+up: monitoring
 
 # After a merge: the latest code, and the images release.yml published from
 # it. `make up` alone never re-downloads an image it already has, so without
@@ -136,9 +138,11 @@ update:
 airflow:
 	docker compose --profile airflow up -d
 
-# Standalone Airflow generates the admin password when it starts.
+# Standalone Airflow generates the admin password on its first start and keeps
+# it with the persisted database (only make clean-state resets it).
+AIRFLOW_PASSWORDS = airflow_data/db/simple_auth_manager_passwords.json.generated
 airflow-password:
-	@docker compose --profile airflow logs airflow | grep "Password for user"
+	@cat $(AIRFLOW_PASSWORDS) 2>/dev/null && echo || echo "No password yet: run make airflow and wait about a minute"
 
 down:
 	docker compose $(PROFILES) down
