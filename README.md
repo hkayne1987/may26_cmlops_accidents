@@ -1,11 +1,13 @@
 # Road Accident Severity Prediction (BAAC)
 
-MLOps project predicting, for each person involved in a road accident in France,
+MLOps platform predicting, for each person involved in a road accident in France,
 whether they are **severely injured** (killed or hospitalized) or not, from the
 public [BAAC dataset](https://www.data.gouv.fr/datasets/53698f4ca3a729239d2036df/).
-The focus is the MLOps lifecycle (versioned data, tracked training, quality
-check before production, serving, monitoring, automatic updates) rather than
-model performance.
+It is built for the developers of an emergency call-centre application, who
+plug the predictions into their software through an API. Keeping those
+predictions reliable takes more than the API: the platform ingests and versions
+new data, retrains, checks a model before production, and monitors the service
+and the data. The focus is this lifecycle rather than model performance.
 
 - **Data:** BAAC 2019-2024, ~745,000 road users, one row per person.
 - **Model:** XGBoost, decision threshold 0.35 to favour recall: an emergency
@@ -16,33 +18,12 @@ call centre would rather over-flag than miss a severe case.
 
 ## Architecture
 
-```mermaid
-flowchart TB
-  gouv[data.gouv.fr] -->|monthly| ingest[ingest.yml]
-  ingest -->|opens| pr[Data pull request]
-  subgraph DagsHub
-    dvc[(DVC: raw data)]
-    mlflow[(MLflow: runs and registry)]
-  end
-  ingest -->|dvc push| dvc
-  subgraph host[Docker host]
-    airflow[Airflow ml_pipeline, daily]
-    ops[Operators] -->|JWT| nginx[NGINX :80]
-    nginx --> api[API x3]
-    api --> db[(predictions.db)]
-    db --> drift[Airflow drift_monitoring, daily]
-    drift --> pg[Pushgateway]
-    pg --> prom[Prometheus]
-    api -->|/metrics| prom
-    prom --> grafana[Grafana]
-  end
-  pr -->|merged on main| airflow
-  dvc -->|dvc pull| airflow
-  airflow -->|train, evaluate, promote| mlflow
-  mlflow -->|production alias| api
-  gh[GitHub Actions: CI, release] -.->|images on GHCR| airflow
-  gh -.->|images on GHCR| api
-```
+![Technical architecture](docs/architecture.svg)
+
+On the left, the developers' application, the only client of the API. In the
+middle, everything that runs with Docker Compose on one host. At the top, the
+services the platform relies on: GitHub for the code, CI and images, DagsHub
+for the data and the models.
 
 
 
@@ -150,9 +131,10 @@ model does not trigger a retrain every day). A manual trigger always runs.
 The pipeline works on its own clone of `main` (`airflow_data/workspace`), so it
 trains on reviewed data with the published code, never on a local checkout.
 
-Retraining lives in Airflow rather than GitHub Actions because GitHub-hosted
-jobs stop after 6 hours and have no GPU. `retrain.yml` runs the same steps by
-hand, as a fallback when Airflow is down.
+Retraining lives in Airflow rather than GitHub Actions: Airflow schedules,
+retries and keeps the history of every run, and free GitHub-hosted runners stop
+after 6 hours and have no GPU. `retrain.yml` runs the same steps by hand, as a
+fallback when Airflow is down.
 
 ## API
 
@@ -176,8 +158,8 @@ a complete example.
 Authentication: passwords are hashed with bcrypt, tokens signed with
 `JWT_SECRET_KEY` (the API refuses to start without a strong one), and the
 account is re-read on each request, so disabling it cuts access at once.
-Roles: `operator` (call centre staff), `service` (Airflow), `admin`. Accounts
-are managed with `make users ARGS="create|list|reset-password|disable|enable ..."`.
+Roles: `operator` (the call-centre application's accounts), `service`
+(Airflow), `admin`. Accounts are managed with `make users ARGS="create|list|reset-password|disable|enable ..."`.
 
 The API runs as **three replicas behind NGINX**, the only entry point. NGINX
 spreads requests between them, answers 404 on `/metrics` (internal to
@@ -221,11 +203,12 @@ Prometheus scrapes every API replica and Grafana shows a provisioned dashboard
 severe predictions, probability distribution, login attempts, reloads.
 
 **Data drift:** the true severity is only known with next year's BAAC release,
-so the early warning is a change in what operators send. Every prediction is
-logged in `data/predictions.db`; the daily `drift_monitoring` DAG (or
+so the early warning is a change in what the application sends. Every
+prediction is logged in `data/predictions.db`; the daily `drift_monitoring` DAG (or
 `make drift`) compares the last 7 days of requests with the data the
-production model was trained on, using Evidently, and alerts in Grafana when
-25% of the columns drift. The HTML report is in `reports/drift/`.
+production model was trained on, using Evidently, and shows an alert in
+Grafana when 25% of the columns drift (no notification is sent yet). The HTML
+report is in `reports/drift/`.
 
 A drift alert calls for a human look, not a retrain: retraining needs new
 labelled data, and the same data would give the same model.
@@ -249,6 +232,11 @@ changing code, rebuild the images (`docker compose build api training`) and set
 (or `retrain.yml`).
 - Airflow starts task containers through the host Docker socket, a privileged
 access that is fine locally but would need revisiting for a real deployment.
+- The API is served over HTTP: a real deployment would terminate TLS on NGINX.
+- Alerts are only shown in Grafana; no notification (mail, chat) is sent.
+- Training runs record the data version but not the code version: the pipeline
+pulls the `latest` images rather than pinned ones.
+- No graphical interface: the API targets developers, not non-technical users.
 - GitHub disables scheduled workflows after 60 days without activity on a
 public repository: re-enable `ingest.yml` from the Actions tab if it stops.
 
