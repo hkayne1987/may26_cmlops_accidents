@@ -41,6 +41,13 @@
     "filesize": 6538156,
     "sha1": "51cf6ecf298e99e5f8ad7eb50ec24801944a1a33"
   },
+  "caracteristiques-2025": {
+    "title": "Caract_2025.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2025/20261030-141517/caract-2025.csv",
+    "last_modified": "2026-10-30T14:15:19.728000+00:00",
+    "filesize": 6622493,
+    "sha1": "0e55b17bab4305d2de9dd76d5a7791f7ebfd9db4"
+  },
   "lieux-2019": {
     "title": "lieux-2019.csv",
     "url": "https://static.data.gouv.fr/resources/base-de-donnees-accidents-corporels-de-la-circulation/20201105-104338/lieux-2019.csv",
@@ -82,6 +89,13 @@
     "last_modified": "2025-10-21T11:58:13.699000+00:00",
     "filesize": 7070795,
     "sha1": "56b2be9a8e0daf50dcdd79bde1b020fba859fcc5"
+  },
+  "lieux-2025": {
+    "title": "Lieux_2025.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2025/20261030-141502/lieux-2025.csv",
+    "last_modified": "2026-10-30T14:15:03.696000+00:00",
+    "filesize": 7260013,
+    "sha1": "fce632f45e3271a5dec248eeabcdc04c8ef7f449"
   },
   "usagers-2019": {
     "title": "usagers-2019.csv",
@@ -125,6 +139,13 @@
     "filesize": 13843733,
     "sha1": "1c03c9552eb13e63ccd1d6708d6adf5e0da1c738"
   },
+  "usagers-2025": {
+    "title": "Usagers_2025.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2025/20261030-141441/usagers-2025.csv",
+    "last_modified": "2026-10-30T14:14:45.495000+00:00",
+    "filesize": 13967977,
+    "sha1": "43c17f096ae1ea50c9f8378d5dff7365c651b900"
+  },
   "vehicules-2019": {
     "title": "vehicules-2019.csv",
     "url": "https://static.data.gouv.fr/resources/base-de-donnees-accidents-corporels-de-la-circulation/20201105-104310/vehicules-2019.csv",
@@ -166,5 +187,12 @@
     "last_modified": "2025-12-29T09:29:20.308000+00:00",
     "filesize": 6369908,
     "sha1": "a1a4c1bfe86181d7c9ee8f68309462dae5e2159a"
+  },
+  "vehicules-2025": {
+    "title": "Vehicules_2025.csv",
+    "url": "https://static.data.gouv.fr/resources/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2025/20261030-141410/vehicules-2025.csv",
+    "last_modified": "2026-10-30T14:14:20.484000+00:00",
+    "filesize": 6450936,
+    "sha1": "2cadc1e28d22380f594f0e067cee0bf44e5a754d"
   }
 }
